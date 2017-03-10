@@ -56,7 +56,7 @@ namespace serialize {
 		}
 
 		P::make(pair);
-		/*
+		
 		// object should end on right curly brace
 		if (!ifs.eof()) {
 			char ch = ignore_whitespace(ifs);
@@ -66,7 +66,7 @@ namespace serialize {
 		}
 		else {
 			throw std::exception("Incorrect syntax");
-		}*/
+		}
 		return t;
 	}
 	
@@ -108,13 +108,71 @@ namespace serialize {
 	template< typename P, typename E, typename F>
 	inline void enum_attribute(dump_pair<E> & e, std::string name, F && f)
 	{
-		// ...
+		e.out << "\"" << name << "\": \"";
+		auto enm = P::enumeration();
+		auto value = f(&e.obj);
+		bool found = false;
+		for (auto i = enm.begin(); i != enm.end(); ++i) {
+			if (i->first == value) {
+				e.out << i->second << "\"," << std::endl;
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			throw std::exception("Enumeration value was not contained in given policy class");
+		}
 	}
 
 	template< typename P, typename E, typename F>
 	inline void enum_attribute(load_pair<E> & e, std::string name, F && f)
 	{
-		// ...
+		// find start of attribute name
+		char ch;
+		ch = ignore_whitespace(e.in);
+		if (ch == '"') {
+			// idf name not important
+			ch = ignore_identifier(e.in);
+			if (ch == '"') {
+				ch = ignore_whitespace(e.in);
+				if (ch == ':') {
+					ch = ignore_whitespace(e.in);
+					if (ch == '"') {
+						std::string value = "";
+						while (!e.in.eof()) {
+							e.in >> ch;
+							if (ch != '"') {
+								value += ch;
+							}
+							else {
+								break;
+							}
+						}
+						if (ch == '"') {
+							ch = ignore_whitespace(e.in);
+							if (ch == ',') {
+								auto rtc = P::create();
+								auto enm = P::enumeration();
+								bool found = false;
+								for (auto i = enm.begin(); i != enm.end(); ++i) {
+									if (i->second == value) {
+										rtc = i->first;
+										found = true;
+										break;
+									}
+								}
+								if (found) {
+									f(&e.obj) = rtc;
+									return;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		// invalid input, throw exception
+		throw std::exception("Incorrect syntax detected during parsing of enum attribute");
 	}
 
 	template< typename E, typename F>
@@ -146,7 +204,43 @@ namespace serialize {
 	template< typename P, typename E, typename F>
 	inline void struct_sequence_attribute(load_pair<E> & e, std::string name, F && f)
 	{
-		// ...
+		// find start of attribute name
+		char ch;
+		ch = ignore_whitespace(e.in);
+		if (ch == '"') {
+			// idf name not important
+			ch = ignore_identifier(e.in);
+			if (ch == '"') {
+				ch = ignore_whitespace(e.in);
+				if (ch == ':') {
+					ch = ignore_whitespace(e.in);
+					if (ch == '[') {
+						auto seq = f(&e.obj);
+						while (!e.in.eof()) {
+							auto obj = load<P>(e.in);
+							seq.push_back(obj);
+							ch = ignore_whitespace(e.in);
+							if (ch != ',') {
+								break;
+							}
+							while (isspace(e.in.peek())) {
+								e.in.get();
+							}
+							if (e.in.peek() == ']') {
+								e.in.get();
+								ch = ignore_whitespace(e.in);
+								if (ch == ',') {
+									f(&e.obj) = seq;
+									return;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		// invalid input, throw exception
+		throw std::exception("Incorrect syntax detected during parsing of struct sequence attribute");
 	}
 }
 
