@@ -1,20 +1,22 @@
 #include "Main.h"
 
-#pragma warning(disable: 4996)
-#include <winsock2.h>
-#include <windows.h>
-
-#pragma comment(lib,"ws2_32.lib")
-
 #define IDC_EDIT_IN		101
 #define IDC_EDIT_OUT		102
 #define IDC_MAIN_BUTTON		103
 #define WM_SOCKET		104
 
-int nPort = 5555;
+// default port
+std::int_fast32_t nPort = 5464;
 
+// Component handles
 HWND hEditIn = NULL;
 HWND hEditOut = NULL;
+HWND hPortNumber = NULL;
+HWND hStartBtn = NULL;
+HWND windowHandle = NULL;
+
+
+
 wchar_t szHistory[10000];
 sockaddr sockAddrClient;
 
@@ -51,9 +53,9 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nS
 			MB_ICONERROR);
 	}
 
-	HWND hWnd = CreateWindowEx(NULL,
+	windowHandle = CreateWindowEx(NULL,
 		L"Window Class",
-		L"Winsock Async Server",
+		L"PlusPlusChat Server",
 		WS_OVERLAPPEDWINDOW,
 		200,
 		200,
@@ -64,7 +66,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nS
 		hInst,
 		NULL);
 
-	if (!hWnd)
+	if (!windowHandle)
 	{
 		int nResult = GetLastError();
 
@@ -74,7 +76,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nS
 			MB_ICONERROR);
 	}
 
-	ShowWindow(hWnd, nShowCmd);
+	ShowWindow(windowHandle, nShowCmd);
 
 	MSG msg;
 	ZeroMemory(&msg, sizeof(MSG));
@@ -96,8 +98,42 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		switch (LOWORD(wParam))
 		{
 		case IDC_MAIN_BUTTON:
-		{
-			wchar_t szBuffer[1024];
+		{		
+			if (state == AppState::STOPPED) {
+				// Get port number
+				wchar_t portBuffer[6];
+				HWND hPortNumber = GetDlgItem(hWnd, IDC_PORTNUMBER);
+				SendMessage(hPortNumber, WM_GETTEXT, sizeof(portBuffer), reinterpret_cast<LPARAM>(portBuffer));
+				std::int_fast32_t port = 0;
+				for (size_t i = 0; i < wcslen(portBuffer); i++)
+				{
+					port *= 10;
+					port += portBuffer[i] - L'0';
+				}
+				if (port == 0) {
+					port = nPort;
+				}
+				if (port > 65535 || port < 1024) {
+					MessageBox(windowHandle, L"Port number is invalid. Valid numbers are 1024 - 65535", L"Invalid port number",MB_ICONERROR);
+					break;
+				}
+				SendMessage(hStartBtn, WM_SETTEXT, NULL, (LPARAM)L"Stop");
+				EnableWindow(hPortNumber, false);
+				StartListening(windowHandle, port);
+				state = AppState::LISTENING;
+			}
+			else {
+				shutdown(ServerSocket, SD_BOTH);
+				closesocket(ServerSocket);
+				WSACleanup();
+				HWND hPortNumber = GetDlgItem(hWnd, IDC_PORTNUMBER);
+				SendMessage(hStartBtn, WM_SETTEXT, NULL, (LPARAM)L"Start");
+				EnableWindow(hPortNumber, true);
+				state = AppState::STOPPED;
+			}
+			
+
+			/*wchar_t szBuffer[1024];
 			ZeroMemory(szBuffer, sizeof(szBuffer));
 
 			SendMessage(hEditOut,
@@ -106,159 +142,17 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				reinterpret_cast<LPARAM>(szBuffer));
 			for (int n = 0; n <= nClient; n++)
 			{
-				send(Socket[n], (char*)szBuffer, wcslen(szBuffer)*2, 0);
+				send(Socket[n], (char*)szBuffer, wcslen(szBuffer) * 2, 0);
 			}
 
-			SendMessage(hEditOut, WM_SETTEXT, NULL, (LPARAM)"");
+			SendMessage(hEditOut, WM_SETTEXT, NULL, (LPARAM)"");*/
 		}
 		break;
 		}
 		break;
 	case WM_CREATE:
 	{
-		ZeroMemory(szHistory, sizeof(szHistory));
-
-		// Create incoming message box
-		hEditIn = CreateWindowEx(WS_EX_CLIENTEDGE,
-			L"EDIT",
-			L"",
-			WS_CHILD | WS_VISIBLE | ES_MULTILINE |
-			ES_AUTOVSCROLL | ES_AUTOHSCROLL,
-			50,
-			120,
-			400,
-			200,
-			hWnd,
-			(HMENU)IDC_EDIT_IN,
-			GetModuleHandle(NULL),
-			NULL);
-		if (!hEditIn)
-		{
-			MessageBox(hWnd,
-				L"Could not create incoming edit box.",
-				L"Error",
-				MB_OK | MB_ICONERROR);
-		}
-		HGDIOBJ hfDefault = GetStockObject(DEFAULT_GUI_FONT);
-		SendMessage(hEditIn,
-			WM_SETFONT,
-			(WPARAM)hfDefault,
-			MAKELPARAM(FALSE, 0));
-		SendMessage(hEditIn,
-			WM_SETTEXT,
-			NULL,
-			(LPARAM)L"Waiting for client to connect...");
-
-		// Create outgoing message box
-		hEditOut = CreateWindowEx(WS_EX_CLIENTEDGE,
-			L"EDIT",
-			L"",
-			WS_CHILD | WS_VISIBLE | ES_MULTILINE |
-			ES_AUTOVSCROLL | ES_AUTOHSCROLL,
-			50,
-			50,
-			400,
-			60,
-			hWnd,
-			(HMENU)IDC_EDIT_IN,
-			GetModuleHandle(NULL),
-			NULL);
-		if (!hEditOut)
-		{
-			MessageBox(hWnd,
-				L"Could not create outgoing edit box.",
-				L"Error",
-				MB_OK | MB_ICONERROR);
-		}
-
-		SendMessage(hEditOut,
-			WM_SETFONT,
-			(WPARAM)hfDefault,
-			MAKELPARAM(FALSE, 0));
-		SendMessage(hEditOut,
-			WM_SETTEXT,
-			NULL,
-			(LPARAM)L"Type message here...");
-
-		// Create a push button
-		HWND hWndButton = CreateWindow(
-			L"BUTTON",
-			L"Send",
-			WS_TABSTOP | WS_VISIBLE |
-			WS_CHILD | BS_DEFPUSHBUTTON,
-			50,
-			330,
-			75,
-			23,
-			hWnd,
-			(HMENU)IDC_MAIN_BUTTON,
-			GetModuleHandle(NULL),
-			NULL);
-
-		SendMessage(hWndButton,
-			WM_SETFONT,
-			(WPARAM)hfDefault,
-			MAKELPARAM(FALSE, 0));
-
-		WSADATA WsaDat;
-		int nResult = WSAStartup(MAKEWORD(2, 2), &WsaDat);
-		if (nResult != 0)
-		{
-			MessageBox(hWnd,
-				L"Winsock initialization failed",
-				L"Critical Error",
-				MB_ICONERROR);
-			SendMessage(hWnd, WM_DESTROY, NULL, NULL);
-			break;
-		}
-
-		ServerSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-		if (ServerSocket == INVALID_SOCKET)
-		{
-			MessageBox(hWnd,
-				L"Socket creation failed",
-				L"Critical Error",
-				MB_ICONERROR);
-			SendMessage(hWnd, WM_DESTROY, NULL, NULL);
-			break;
-		}
-
-		SOCKADDR_IN SockAddr;
-		SockAddr.sin_port = htons(nPort);
-		SockAddr.sin_family = AF_INET;
-		SockAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-		//SockAddr.sin_addr.s_addr = inet_addr(INADDR_ANY);
-
-		if (bind(ServerSocket, (LPSOCKADDR)&SockAddr, sizeof(SockAddr)) == SOCKET_ERROR)
-		{
-			MessageBox(hWnd, L"Unable to bind socket", L"Error", MB_OK);
-			SendMessage(hWnd, WM_DESTROY, NULL, NULL);
-			break;
-		}
-
-		nResult = WSAAsyncSelect(ServerSocket,
-			hWnd,
-			WM_SOCKET,
-			(FD_CLOSE | FD_ACCEPT | FD_READ));
-		if (nResult)
-		{
-			MessageBox(hWnd,
-				L"WSAAsyncSelect failed",
-				L"Critical Error",
-				MB_ICONERROR);
-			SendMessage(hWnd, WM_DESTROY, NULL, NULL);
-			break;
-		}
-
-		if (listen(ServerSocket, SOMAXCONN) == SOCKET_ERROR)
-		{
-			MessageBox(hWnd,
-				L"Unable to listen!",
-				L"Error",
-				MB_OK);
-			SendMessage(hWnd, WM_DESTROY, NULL, NULL);
-			break;
-		}
+		CreateLayout(hWnd);
 	}
 	break;
 
@@ -313,7 +207,7 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 		case FD_ACCEPT:
 		{
-			if (nClient<nMaxClients)
+			if (nClient < nMaxClients)
 			{
 				int size = sizeof(sockaddr);
 				Socket[nClient] = accept(wParam, &sockAddrClient, &size);
@@ -337,139 +231,194 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	return DefWindowProc(hWnd, msg, wParam, lParam);
 }
 
-/*#ifndef UNICODE
-#define UNICODE
-#endif
+void CreateLayout(HWND hWnd) {
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
+	ZeroMemory(szHistory, sizeof(szHistory));
 
-#include <Windows.h>
-
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <stdio.h>
-#include <stdlib.h>
-
-// Need to link with Ws2_32.lib
-#pragma comment(lib, "ws2_32.lib")
-
-#pragma warning(disable: 4127)  // Conditional expression is a constant
-
-#define DATA_BUFSIZE 4096
-
-int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow)
-{
-	WSADATA wsd;
-	struct addrinfo *result = NULL, *ptr = NULL, hints;
-	WSAOVERLAPPED RecvOverlapped;
-	SOCKET ConnSocket = INVALID_SOCKET;
-	WSABUF DataBuf;
-	DWORD RecvBytes, Flags;
-	char buffer[DATA_BUFSIZE];
-
-	int err = 0;
-	int rc;
-
-	// Load Winsock
-	rc = WSAStartup(MAKEWORD(2, 2), &wsd);
-	if (rc != 0) {
-		wprintf(L"Unable to load Winsock: %d\n", rc);
-		return 1;
+	// Create incoming message box
+	hEditIn = CreateWindowEx(WS_EX_CLIENTEDGE,
+		L"EDIT",
+		L"",
+		WS_CHILD | WS_VISIBLE | ES_MULTILINE |
+		ES_AUTOVSCROLL | ES_AUTOHSCROLL,
+		20,
+		20,
+		580,
+		240,
+		hWnd,
+		(HMENU)IDC_EDIT_IN,
+		GetModuleHandle(NULL),
+		NULL);
+	if (!hEditIn)
+	{
+		MessageBox(hWnd,
+			L"Could not create incoming edit box.",
+			L"Error",
+			MB_OK | MB_ICONERROR);
 	}
-	// Make sure the hints struct is zeroed out
-	SecureZeroMemory((PVOID)& hints, sizeof(struct addrinfo));
+	HGDIOBJ hfDefault = GetStockObject(DEFAULT_GUI_FONT);
+	SendMessage(hEditIn,
+		WM_SETFONT,
+		(WPARAM)hfDefault,
+		MAKELPARAM(FALSE, 0));
+	SendMessage(hEditIn,
+		WM_SETTEXT,
+		NULL,
+		(LPARAM)L"Waiting for client to connect...");
 
-	// Initialize the hints to retrieve the server address for IPv4
-	hints.ai_family = AF_INET;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_protocol = IPPROTO_TCP;
-
-
-
-		ConnSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-		if (ConnSocket == INVALID_SOCKET) {
-			wprintf(L"socket failed with error: %d\n", WSAGetLastError());
-			freeaddrinfo(result);
-			return 1;
-		}
-
-		rc = connect(ConnSocket, ptr->ai_addr, (int)ptr->ai_addrlen);
-		if (rc == SOCKET_ERROR) {
-
-			if (WSAECONNREFUSED == (err = WSAGetLastError())) {
-				closesocket(ConnSocket);
-				ConnSocket = INVALID_SOCKET;
-				continue;
-			}
-			wprintf(L"connect failed with error: %d\n", err);
-			freeaddrinfo(result);
-			closesocket(ConnSocket);
-			return 1;
-		}
-		break;
-	
-	if (ConnSocket == INVALID_SOCKET) {
-		wprintf(L"Unable to establish connection with the server!\n");
-		freeaddrinfo(result);
-		return 1;
+	// Create outgoing message box
+	hEditOut = CreateWindowEx(WS_EX_CLIENTEDGE,
+		L"EDIT",
+		L"",
+		WS_CHILD | WS_VISIBLE | ES_MULTILINE |
+		ES_AUTOVSCROLL | ES_AUTOHSCROLL,
+		20,
+		280,
+		580,
+		60,
+		hWnd,
+		(HMENU)IDC_EDIT_IN,
+		GetModuleHandle(NULL),
+		NULL);
+	if (!hEditOut)
+	{
+		MessageBox(hWnd,
+			L"Could not create outgoing edit box.",
+			L"Error",
+			MB_OK | MB_ICONERROR);
 	}
 
-	wprintf(L"Client connected...\n");
+	SendMessage(hEditOut,
+		WM_SETFONT,
+		(WPARAM)hfDefault,
+		MAKELPARAM(FALSE, 0));
+	SendMessage(hEditOut,
+		WM_SETTEXT,
+		NULL,
+		(LPARAM)L"Type message here...");
 
-	// Make sure the RecvOverlapped struct is zeroed out
-	SecureZeroMemory((PVOID)& RecvOverlapped, sizeof(WSAOVERLAPPED));
-
-	// Create an event handle and setup an overlapped structure.
-	RecvOverlapped.hEvent = WSACreateEvent();
-	if (RecvOverlapped.hEvent == NULL) {
-		wprintf(L"WSACreateEvent failed: %d\n", WSAGetLastError());
-		freeaddrinfo(result);
-		closesocket(ConnSocket);
-		return 1;
+	// Create port message box
+	hPortNumber = CreateWindowEx(WS_EX_CLIENTEDGE,
+		L"EDIT",
+		L"",
+		WS_CHILD | WS_VISIBLE |
+		ES_NUMBER,
+		50,
+		360,
+		60,
+		23,
+		hWnd,
+		(HMENU)IDC_PORTNUMBER,
+		GetModuleHandle(NULL),
+		NULL);
+	if (!hPortNumber)
+	{
+		MessageBox(hWnd,
+			L"Could not create port edit box.",
+			L"Error",
+			MB_OK | MB_ICONERROR);
 	}
 
-	DataBuf.len = DATA_BUFSIZE;
-	DataBuf.buf = buffer;
+	SendMessage(hPortNumber,
+		WM_SETFONT,
+		(WPARAM)hfDefault,
+		MAKELPARAM(FALSE, 0));
+	SendMessage(hPortNumber, EM_LIMITTEXT, 5, NULL);
 
-	// Call WSARecv until the peer closes the connection
-	// or until an error occurs
-	while (1) {
+	// Create port label
+	HWND hPortLbl = CreateWindowEx(0,
+		L"STATIC",
+		L"Port:",
+		WS_CHILD | WS_VISIBLE,
+		20,
+		360,
+		25,
+		23,
+		hWnd,
+		NULL,
+		GetModuleHandle(NULL),
+		NULL);
 
-		Flags = 0;
-		rc = WSARecv(ConnSocket, &DataBuf, 1, &RecvBytes, &Flags, &RecvOverlapped, NULL);
-		if ((rc == SOCKET_ERROR) && (WSA_IO_PENDING != (err = WSAGetLastError()))) {
-			wprintf(L"WSARecv failed with error: %d\n", err);
-			break;
-		}
+	SendMessage(hPortLbl, WM_SETFONT, (WPARAM)hfDefault, MAKELPARAM(FALSE, 0));
 
-		rc = WSAWaitForMultipleEvents(1, &RecvOverlapped.hEvent, TRUE, INFINITE, TRUE);
-		if (rc == WSA_WAIT_FAILED) {
-			wprintf(L"WSAWaitForMultipleEvents failed with error: %d\n", WSAGetLastError());
-			break;
-		}
+	// Create a push button
+	hStartBtn = CreateWindow(
+		L"BUTTON",
+		L"Start",
+		WS_TABSTOP | WS_VISIBLE |
+		WS_CHILD | BS_DEFPUSHBUTTON,
+		120,
+		360,
+		75,
+		23,
+		hWnd,
+		(HMENU)IDC_MAIN_BUTTON,
+		GetModuleHandle(NULL),
+		NULL);
 
-		rc = WSAGetOverlappedResult(ConnSocket, &RecvOverlapped, &RecvBytes, FALSE, &Flags);
-		if (rc == FALSE) {
-			wprintf(L"WSARecv operation failed with error: %d\n", WSAGetLastError());
-			break;
-		}
+	SendMessage(hStartBtn,
+		WM_SETFONT,
+		(WPARAM)hfDefault,
+		MAKELPARAM(FALSE, 0));
+}
 
-		wprintf(L"Read %d bytes\n", RecvBytes);
-
-		WSAResetEvent(RecvOverlapped.hEvent);
-
-		// If 0 bytes are received, the connection was closed
-		if (RecvBytes == 0)
-			break;
+void StartListening(HWND hWnd, std::int_fast32_t port) {
+	WSADATA WsaDat;
+	int nResult = WSAStartup(MAKEWORD(2, 2), &WsaDat);
+	if (nResult != 0)
+	{
+		MessageBox(hWnd,
+			L"Winsock initialization failed",
+			L"Critical Error",
+			MB_ICONERROR);
+		SendMessage(hWnd, WM_DESTROY, NULL, NULL);
+		return;
 	}
 
-	WSACloseEvent(RecvOverlapped.hEvent);
-	closesocket(ConnSocket);
-	freeaddrinfo(result);
+	ServerSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (ServerSocket == INVALID_SOCKET)
+	{
+		MessageBox(hWnd,
+			L"Socket creation failed",
+			L"Critical Error",
+			MB_ICONERROR);
+		SendMessage(hWnd, WM_DESTROY, NULL, NULL);
+		return;
+	}
 
-	WSACleanup();
+	SOCKADDR_IN SockAddr;
+	SockAddr.sin_port = htons(port);
+	SockAddr.sin_family = AF_INET;
+	SockAddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-	return 0;
-}*/
+	if (bind(ServerSocket, (LPSOCKADDR)&SockAddr, sizeof(SockAddr)) == SOCKET_ERROR)
+	{
+		MessageBox(hWnd, L"Unable to bind socket", L"Error", MB_OK);
+		SendMessage(hWnd, WM_DESTROY, NULL, NULL);
+		return;
+	}
+
+	nResult = WSAAsyncSelect(ServerSocket,
+		hWnd,
+		WM_SOCKET,
+		(FD_CLOSE | FD_ACCEPT | FD_READ));
+	if (nResult)
+	{
+		MessageBox(hWnd,
+			L"WSAAsyncSelect failed",
+			L"Critical Error",
+			MB_ICONERROR);
+		SendMessage(hWnd, WM_DESTROY, NULL, NULL);
+		return;
+	}
+
+	if (listen(ServerSocket, SOMAXCONN) == SOCKET_ERROR)
+	{
+		MessageBox(hWnd,
+			L"Unable to listen!",
+			L"Error",
+			MB_OK);
+		SendMessage(hWnd, WM_DESTROY, NULL, NULL);
+		return;
+	}
+}
