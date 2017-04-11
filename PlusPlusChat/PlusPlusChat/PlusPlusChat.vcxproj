@@ -19,12 +19,29 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="ChatWindow.cpp" />
+    <ClCompile Include="Communicator.cpp" />
     <ClCompile Include="ConnectionWindow.cpp" />
+    <ClCompile Include="ContextSingleton.cpp" />
     <ClCompile Include="Main.cpp" />
+    <ClCompile Include="RoomWindow.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ChatWindow.h" />
+    <ClInclude Include="Communicator.h" />
     <ClInclude Include="ConnectionWindow.h" />
+    <ClInclude Include="ContextSingleton.h" />
+    <ClInclude Include="Enumerations.h" />
     <ClInclude Include="Main.h" />
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="RoomWindow.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="PlusPlusChat.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="chatBubbleBig.ico" />
+    <Image Include="chatBubbleSmall.ico" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{9B760595-61D0-4348-AB9A-6FA8265C8F99}</ProjectGuid>

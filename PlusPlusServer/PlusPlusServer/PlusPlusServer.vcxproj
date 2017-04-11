@@ -146,14 +146,22 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\Main.cpp" />
+    <ClCompile Include="Context.cpp" />
+    <ClCompile Include="Main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Context.h" />
+    <ClInclude Include="Enums.h" />
+    <ClInclude Include="Main.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="src\Main.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="PlusPlusServer.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="chatBubbleBig.ico" />
+    <Image Include="chatBubbleSmall.ico" />
+    <Image Include="icon2.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

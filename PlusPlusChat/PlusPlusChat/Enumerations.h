@@ -1,0 +1,17 @@
+#ifndef PLUSPLUSCHAT_ENUMS_
+#define PLUSPLUSCHAT_ENUMS_
+
+namespace PlusPlusChat {
+
+	// DISCONNECTED -> CONNECTING -> CONNECTED -> CHATTING
+	enum AppState {
+		DISCONNECTED, CONNECTED, CHATTING, CONNECTING
+	};
+
+	enum Action {
+		INIT, TINI, ACK, ERR, INVALID_ACTION
+	};
+
+}
+
+#endif

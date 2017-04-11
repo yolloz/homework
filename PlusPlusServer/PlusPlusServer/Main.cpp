@@ -20,10 +20,8 @@ HWND windowHandle = NULL;
 wchar_t szHistory[10000];
 sockaddr sockAddrClient;
 
-const int nMaxClients = 3;
-int nClient = 0;
-SOCKET Socket[nMaxClients - 1];
-SOCKET ServerSocket = NULL;
+
+//SOCKET Socket[maxActiveClients - 1];
 
 LRESULT CALLBACK WinProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
@@ -31,13 +29,17 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nS
 {
 	WNDCLASSEX wClass;
 	ZeroMemory(&wClass, sizeof(WNDCLASSEX));
+
+	HICON icon = LoadIcon(hInst, MAKEINTRESOURCE(IDI_ICON1));
+	HICON iconSmall = LoadIcon(hInst, MAKEINTRESOURCE(IDI_ICON3));
+
 	wClass.cbClsExtra = NULL;
 	wClass.cbSize = sizeof(WNDCLASSEX);
 	wClass.cbWndExtra = NULL;
 	wClass.hbrBackground = (HBRUSH)COLOR_WINDOW;
 	wClass.hCursor = LoadCursor(NULL, IDC_ARROW);
-	wClass.hIcon = NULL;
-	wClass.hIconSm = NULL;
+	wClass.hIcon = icon;
+	wClass.hIconSm = iconSmall;
 	wClass.hInstance = hInst;
 	wClass.lpfnWndProc = (WNDPROC)WinProc;
 	wClass.lpszClassName = L"Window Class";
@@ -99,7 +101,7 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		{
 		case IDC_MAIN_BUTTON:
 		{		
-			if (state == AppState::STOPPED) {
+			if (Context::GetContext().State() == AppState::STOPPED) {
 				// Get port number
 				wchar_t portBuffer[6];
 				HWND hPortNumber = GetDlgItem(hWnd, IDC_PORTNUMBER);
@@ -120,16 +122,16 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				SendMessage(hStartBtn, WM_SETTEXT, NULL, (LPARAM)L"Stop");
 				EnableWindow(hPortNumber, false);
 				StartListening(windowHandle, port);
-				state = AppState::LISTENING;
+				Context::GetContext().State() = AppState::LISTENING;
 			}
 			else {
-				shutdown(ServerSocket, SD_BOTH);
-				closesocket(ServerSocket);
+				shutdown(Context::GetContext().ServerSocket, SD_BOTH);
+				closesocket(Context::GetContext().ServerSocket);
 				WSACleanup();
 				HWND hPortNumber = GetDlgItem(hWnd, IDC_PORTNUMBER);
 				SendMessage(hStartBtn, WM_SETTEXT, NULL, (LPARAM)L"Start");
 				EnableWindow(hPortNumber, true);
-				state = AppState::STOPPED;
+				Context::GetContext().State() = AppState::STOPPED;
 			}
 			
 
@@ -159,8 +161,8 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_DESTROY:
 	{
 		PostQuitMessage(0);
-		shutdown(ServerSocket, SD_BOTH);
-		closesocket(ServerSocket);
+		shutdown(Context::GetContext().ServerSocket, SD_BOTH);
+		closesocket(Context::GetContext().ServerSocket);
 		WSACleanup();
 		return 0;
 	}
@@ -171,57 +173,51 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		switch (WSAGETSELECTEVENT(lParam))
 		{
 		case FD_READ:
-		{
-			for (int n = 0; n <= nMaxClients; n++)
+		{			
+			wchar_t incoming[1024];
+			ZeroMemory(incoming, sizeof(incoming));
+
+			int inDataLength = recv((SOCKET)wParam, (char*)incoming, sizeof(incoming) / sizeof((char)incoming[0]), 0);
+
+			if (inDataLength != -1)
 			{
-				wchar_t szIncoming[1024];
-				ZeroMemory(szIncoming, sizeof(szIncoming));
+				wcsncat(szHistory, incoming, inDataLength);
+				wcscat(szHistory, L"\r\n");
 
-				int inDataLength = recv(Socket[n],
-					(char*)szIncoming,
-					sizeof(szIncoming) / sizeof(szIncoming[0]),
-					0);
+				SendMessage(hEditIn, WM_SETTEXT, sizeof(incoming) - 1, reinterpret_cast<LPARAM>(&szHistory));
 
-				if (inDataLength != -1)
-				{
-					wcsncat(szHistory, szIncoming, inDataLength);
-					wcscat(szHistory, L"\r\n");
-
-					SendMessage(hEditIn,
-						WM_SETTEXT,
-						sizeof(szIncoming) - 1,
-						reinterpret_cast<LPARAM>(&szHistory));
-				}
+				ProcessMessage(incoming, (SOCKET)wParam);
 			}
+			break;
 		}
-		break;
 
 		case FD_CLOSE:
 		{
-			MessageBox(hWnd,
-				L"Client closed connection",
-				L"Connection closed!",
-				MB_ICONINFORMATION | MB_OK);
+			MessageBox(hWnd, L"Client closed connection", L"Connection closed!", MB_ICONINFORMATION | MB_OK);
+			Context::GetContext().RemoveClient((SOCKET)wParam);
+			break;
 		}
-		break;
 
 		case FD_ACCEPT:
 		{
-			if (nClient < nMaxClients)
+			int size = sizeof(sockaddr);
+			auto socket = accept(wParam, &sockAddrClient, &size);
+			if (socket != INVALID_SOCKET)
 			{
-				int size = sizeof(sockaddr);
-				Socket[nClient] = accept(wParam, &sockAddrClient, &size);
-				if (Socket[nClient] == INVALID_SOCKET)
+				if (Context::GetContext().CanAddClient())
 				{
-					int nret = WSAGetLastError();
-					WSACleanup();
+					Context::GetContext().AddClient(socket);
+					SendMessage(hEditIn, WM_SETTEXT, NULL, (LPARAM)L"Client connected!");
 				}
-				SendMessage(hEditIn,
-					WM_SETTEXT,
-					NULL,
-					(LPARAM)L"Client connected!");
+				else {
+					SendMsg(Action::ERR, L"Maximum connections limit was reached", socket);
+					shutdown(socket, SD_BOTH);
+					closesocket(socket);
+				}
 			}
-			nClient++;
+			else {
+				// TODO log maybe
+			}
 		}
 		break;
 		}
@@ -367,21 +363,14 @@ void StartListening(HWND hWnd, std::int_fast32_t port) {
 	int nResult = WSAStartup(MAKEWORD(2, 2), &WsaDat);
 	if (nResult != 0)
 	{
-		MessageBox(hWnd,
-			L"Winsock initialization failed",
-			L"Critical Error",
-			MB_ICONERROR);
+		MessageBox(hWnd, L"Winsock initialization failed", L"Critical Error", MB_ICONERROR);
 		SendMessage(hWnd, WM_DESTROY, NULL, NULL);
 		return;
 	}
-
-	ServerSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (ServerSocket == INVALID_SOCKET)
+	Context::GetContext().ServerSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (Context::GetContext().ServerSocket == INVALID_SOCKET)
 	{
-		MessageBox(hWnd,
-			L"Socket creation failed",
-			L"Critical Error",
-			MB_ICONERROR);
+		MessageBox(hWnd, L"Socket creation failed", L"Critical Error", MB_ICONERROR);
 		SendMessage(hWnd, WM_DESTROY, NULL, NULL);
 		return;
 	}
@@ -391,14 +380,14 @@ void StartListening(HWND hWnd, std::int_fast32_t port) {
 	SockAddr.sin_family = AF_INET;
 	SockAddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-	if (bind(ServerSocket, (LPSOCKADDR)&SockAddr, sizeof(SockAddr)) == SOCKET_ERROR)
+	if (bind(Context::GetContext().ServerSocket, (LPSOCKADDR)&SockAddr, sizeof(SockAddr)) == SOCKET_ERROR)
 	{
 		MessageBox(hWnd, L"Unable to bind socket", L"Error", MB_OK);
 		SendMessage(hWnd, WM_DESTROY, NULL, NULL);
 		return;
 	}
 
-	nResult = WSAAsyncSelect(ServerSocket,
+	nResult = WSAAsyncSelect(Context::GetContext().ServerSocket,
 		hWnd,
 		WM_SOCKET,
 		(FD_CLOSE | FD_ACCEPT | FD_READ));
@@ -412,7 +401,7 @@ void StartListening(HWND hWnd, std::int_fast32_t port) {
 		return;
 	}
 
-	if (listen(ServerSocket, SOMAXCONN) == SOCKET_ERROR)
+	if (listen(Context::GetContext().ServerSocket, SOMAXCONN) == SOCKET_ERROR)
 	{
 		MessageBox(hWnd,
 			L"Unable to listen!",
@@ -422,3 +411,57 @@ void StartListening(HWND hWnd, std::int_fast32_t port) {
 		return;
 	}
 }
+
+bool ProcessMessage(wchar_t * message, SOCKET s) {
+	std::wstring ws(message);
+	std::vector<std::wstring> tokens = split(ws, L' ');
+	if (tokens.size() >= 2) {
+		if (tokens[0] == L"#PPChat") {
+			auto action = Context::ResolveAction(tokens[1]);
+			switch (action) {
+			case Action::INIT: {
+				Context::GetContext().Clients()[s].state = ClientState::CONNECTING;
+				SendMsg(Action::TINI, L"", s);
+				break;
+			}
+
+			case Action::ACK: {
+				Context::GetContext().Clients()[s].state = ClientState::CONNECTED;
+				break;
+			}
+					   
+			}
+		}
+	}
+	return false;
+}
+
+std::wstring BuildMessage(const std::wstring & action, const std::wstring & payload) {
+	return L"#PPChat " + action + L" " + payload;
+}
+
+std::wstring BuildMessage(const std::wstring & action) {
+	return L"#PPChat " + action;
+}
+
+void SendMsg(Action action, const std::wstring & payload, SOCKET s) {	
+	switch (action) {
+	case Action::ERR: {
+		auto p = BuildMessage(L"ERR", payload);
+		const wchar_t * msg( p.c_str());
+		send(s, (char *)msg, wcslen(msg) * 2, 0);
+		break;
+	}
+
+	case Action::TINI: {
+		auto p = BuildMessage(L"TINI");
+		const wchar_t * msg(p.c_str());
+		send(s, (char *)msg, wcslen(msg) * 2, 0);
+		break;
+	}
+
+	}
+}
+
+
+

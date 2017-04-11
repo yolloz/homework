@@ -1,0 +1,17 @@
+#ifndef PLUSPLUSSERVER_ENUMS_
+#define PLUSPLUSSERVER_ENUMS_
+
+enum AppState
+{
+	LISTENING, STOPPED
+};
+
+enum Action {
+	INIT, TINI, ERR, ACK, INVALID_ACTION
+};
+
+enum ClientState {
+	NEW, CONNECTING, CONNECTED, CHATTING
+};
+
+#endif
