@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <map>
 #include <vector>
+#include <unordered_map>
 
 using IO = ACIO<mock, seq_client<100, 10, 30>, verifier>;
 
@@ -20,7 +21,7 @@ class BTree {
 
 private:
 
-	static const int cacheSize = 10;			// number of blocks in cache
+	static const int cacheSize = 1000;			// number of blocks in cache
 	static const size_t blockSize_64 = blockSize / sizeof(std::uint64_t);
 	static const size_t blockSize_32 = blockSize / sizeof(std::uint32_t);
 	static const size_t blockSize_8 = blockSize / sizeof(std::uint8_t);
@@ -29,10 +30,12 @@ private:
 
 	blockArray _root;								// root block
 	std::uint64_t _rootID = 0;							// ID of root block
-	std::array<blockArray, cacheSize> _cache;		// cache
+	std::unordered_map<std::uint64_t, blockArray> _cache;		// cache
 	std::size_t _cachePtr = 0;							// index of oldest cached block;
 	std::map<std::uint64_t, size_t> _map;		// maps block_ID to index in memory
-	std::map<std::uint64_t, size_t> _cacheMap;	// maps block_ID in cache
+	std::vector<std::uint64_t> _cacheHistory;	// maps block_ID in cache
+	size_t freeCache = cacheSize;				// number of free cache blocks
+	size_t oldestCacheIndex = 0;				// index of oldest id in chace history
 	std::size_t _currentSize = 0;				// number of currently allocated blocks
 	std::size_t _occupied = 0;					// number of currently occupied blocks
 	std::vector<bool> _blockTable;				// table of occupied blocks
@@ -97,6 +100,9 @@ private:
 
 	// returns number of keys in block
 	std::uint32_t GetBlockSize(blockArray & block) {
+		std::uint32_t * ptr;
+		ptr = (std::uint32_t *) block.data();
+		std::uint32_t  size = ptr[blockSize_32 - 2];
 		return ((std::uint32_t *) block.data())[blockSize_32 - 2];
 	}
 
@@ -145,19 +151,40 @@ private:
 		return false;
 	}
 
-	bool LoadBlock(std::uint64_t id, blockArray & b) {
+	bool LoadBlock(std::uint64_t id) {
 		auto i = _map.find(id);
 		if (i != _map.end()) {
-			return SyncRead(io, i->second, b);
+			if (SyncRead(io, i->second, _cache[id])) {
+				GetCacheSpace(id);
+				return true;
+			}
 		}
 		return false;
 	}
 
-	bool RemoveBlock(blockArray & b) { return true; };
+	bool RemoveBlock(blockArray & b) {
+		auto id = GetBlockID(b);
+		_cache.erase(id);
+		auto i = _map.find(id); {
+			if (i != _map.end()) {
+				_blockTable[i->second] = false;
+				_map.erase(id);
+			}
+		}
+		return true;
+	};
 
-	size_t GetCacheSpace() {
+	size_t GetCacheSpace(std::uint64_t id) {
 		size_t rtc = _cachePtr++;
 		_cachePtr %= cacheSize;
+		freeCache--;
+		//_cacheHistory.push_back(8);
+		if (_cacheHistory.size() < rtc + 1) {
+			_cacheHistory.push_back(id);
+		}
+		else {
+			_cacheHistory[rtc] = id;
+		}
 		return rtc;
 	}
 
@@ -166,19 +193,15 @@ private:
 		if (id == _rootID) {
 			return _root;
 		}
-		auto i = _cacheMap.find(id);
-		if (i != _cacheMap.end()) {
+		auto i = _cache.find(id);
+		if (i != _cache.end()) {
 			// block is cached, no need to load
-			return _cache[i->second];
+			return _cache[id];
 		}
 		else {
 			// block is not cached, we need to load it
-			auto idx = GetCacheSpace();
-			auto oldId = GetBlockID(_cache[idx]);
-			if (LoadBlock(id, _cache[idx])) {
-				_cacheMap[id] = idx;
-				_cacheMap.erase(oldId);
-				return _cache[idx];
+			if (LoadBlock(id)) {
+				return _cache[id];
 			}
 			else {
 				// TODO fail
@@ -252,15 +275,15 @@ private:
 				}
 			}
 		}
+		return 0;
 	}
 
-	blockArray & GetNewBlock(bool leaf) {
-		auto cacheIdx = GetCacheSpace();
-		auto oldId = GetBlockID(_cache[cacheIdx]);
-		_cacheMap.erase(oldId);
+	blockArray & GetNewBlock(bool leaf) {		
 		auto newId = GetNewID();
-		InitNewBlock(_cache[cacheIdx], newId, leaf);
-		return _cache[cacheIdx];
+		auto && rtc = _cache[newId];
+		InitNewBlock(rtc, newId, leaf);
+		GetCacheSpace(newId);
+		return rtc;
 	}
 
 	InsertStruct InsertToLeaf(std::uint64_t key, std::uint64_t value, blockArray & b) {
@@ -307,7 +330,7 @@ private:
 	}
 
 	InsertStruct SplitLeaf(std::uint64_t key, std::uint64_t value, blockArray & b) {
-		auto newBlock = GetNewBlock(true);
+		auto && newBlock = GetNewBlock(true);
 		std::uint64_t midVal = 0;
 		size_t i = 0;
 		while (i < minRecords && key > b[2 * i]) {
@@ -347,6 +370,11 @@ private:
 			b[2 * j] = b[2 * i];
 			b[2 * j + 1] = b[2 * i + 1];
 			i++; j++;
+		}
+		while (j < maxRecords) {
+			b[2 * j] = -1;
+			b[2 * j + 1] = -1;
+			j++;
 		}
 		// set sizes
 		SetBlockSize(newBlock, minRecords);
@@ -405,7 +433,7 @@ private:
 	}
 
 	InsertStruct SplitInnerNode(std::uint64_t key, std::uint64_t leftNode, std::uint64_t rightNode, blockArray & b) {
-		auto newBlock = GetNewBlock(false);
+		auto && newBlock = GetNewBlock(false);
 		InsertStruct rtc;
 		rtc.split = true;
 		size_t i = 0;
@@ -527,6 +555,14 @@ private:
 					left[2 * j] = right[2 * i];
 					left[2 * j + 1] = right[2 * i + 1];
 				}
+				while (j < maxRecords) {
+					left[2 * j] = -1;
+					left[2 * j + 1] = -1;
+					j++;
+				}
+
+				SetBlockSize(left, maxRecords - 1);
+
 				SaveBlock(left);
 				RemoveBlock(right);
 				return MergeStruct{ true, 0 };
@@ -571,6 +607,12 @@ private:
 					left[2 * i] = right[2 * j];
 					left[2 * i + 1] = right[2 * j + 1];
 				}
+				while (i < maxRecords)
+				{
+					left[2 * i] = -1;
+					left[2 * i + 1] = -1;
+					i++;
+				}
 				SetBlockSize(left, maxRecords - 1);
 				SaveBlock(left);
 				RemoveBlock(right);
@@ -585,6 +627,8 @@ private:
 					right[2 * i] = right[2 * i + 2];
 					right[2 * i + 1] = right[2 * i + 3];
 				}
+				right[2 * i] = -1;
+				right[2 * i + 1] = -1;
 
 				SetBlockSize(right, rightSize - 1);
 
@@ -603,8 +647,9 @@ private:
 			auto leftSize = GetBlockSize(left);
 			if (leftSize == minRecords) {
 				// must merge blocks
+				left[2 * leftSize + 1] = key;
 				size_t i = 0;
-				size_t j = leftSize;
+				size_t j = leftSize + 1;
 				for (; i < removedIdx; i++, j++)
 				{
 					left[2 * j] = right[2 * i];
@@ -617,33 +662,35 @@ private:
 					left[2 * j + 1] = right[2 * i + 1];
 					left[2 * j + 2] = right[2 * i + 2];
 				}
+				SetBlockSize(left, maxRecords);
+
 				SaveBlock(left);
 				RemoveBlock(right);
 				return MergeStruct{ true, 0 };
 			}
 			else {
 				// borrow max child from left
-				MergeStruct rtc = MergeStruct{ false, left[2 * leftSize + 1] };
+				MergeStruct rtc = MergeStruct{ false, left[2 * leftSize - 1] };
 				std::uint64_t tmpPtr = right[0];
 				std::uint64_t tmpKey = right[1];
-				right[0] = left[2 * leftSize + 2];
+				right[0] = left[2 * leftSize];
 				right[1] = key;
-				left[2 * leftSize + 2] = tmpKey;
-				left[2 * leftSize + 1] = tmpPtr;
+				left[2 * leftSize] = tmpKey;
+				left[2 * leftSize - 1] = tmpPtr;
 				size_t i = 1;
 				for (; i <= removedIdx; i++)
 				{
 					tmpPtr = right[2 * i];
 					tmpKey = right[2 * i + 1];
-					right[2 * i] = left[2 * leftSize + 1];
-					right[2 * i + 1] = left[2 * leftSize + 2];
-					left[2 * leftSize + 2] = tmpKey;
-					left[2 * leftSize + 1] = tmpPtr;
+					right[2 * i] = left[2 * leftSize - 1];
+					right[2 * i + 1] = left[2 * leftSize];
+					left[2 * leftSize] = tmpKey;
+					left[2 * leftSize - 1] = tmpPtr;
 				}
-				// delete removed key
-				right[2 * i] = left[2 * leftSize + 1];
-				left[2 * leftSize + 2] = -1;
-				left[2 * leftSize + 1] = -1;
+				// delete ptr
+				right[2 * i] = left[2 * leftSize - 1];
+				left[2 * leftSize] = -1;
+				left[2 * leftSize - 1] = -1;
 
 				SetBlockSize(left, leftSize - 1);
 
@@ -659,7 +706,7 @@ private:
 			size_t i = removedIdx;
 			for (; i < GetBlockSize(left) - 1; i++)
 			{
-				left[2 * i + 1] = left[2 * 1 + 3];
+				left[2 * i + 1] = left[2 * i + 3];
 				left[2 * i + 2] = left[2 * i + 4];
 			}
 			left[2 * i + 1] = key;
@@ -672,17 +719,20 @@ private:
 					left[2 * i] = right[2 * j];
 					left[2 * i + 1] = right[2 * j + 1];
 				}
-				// skip deleted key
+				// add end pointer
 				left[2 * i] = right[2 * j];
+
+				SetBlockSize(left, maxRecords);
+
 				SaveBlock(left);
 				RemoveBlock(right);
 				return MergeStruct{ true, 0 };
 			}
 			else {
-				// borrow max child from right
+				// borrow min child from right
 				MergeStruct rtc = MergeStruct{ false, right[1] };
 				left[2 * i] = right[0];
-				for (i = 1; i < rightSize; i++)
+				for (i = 0; i < rightSize; i++)
 				{
 					right[2 * i] = right[2 * i + 2];
 					right[2 * i + 1] = right[2 * i + 3];
@@ -704,6 +754,8 @@ private:
 	DeleteStruct DeleteFromInnerNode(std::uint64_t key, blockArray & b) {
 		size_t i = 0;
 		DeleteStruct rtc;
+		auto size = GetBlockSize(b);
+		auto id = GetBlockID(b);
 		while (key >= b[2 * i + 1] && i < GetBlockSize(b)) {
 			i++;
 		}
@@ -724,6 +776,8 @@ private:
 				}
 				if (merged.merged) {
 					// leaves merged, must remove key
+					auto size2 = GetBlockSize(b);
+					auto id2 = GetBlockID(b);
 					if (GetBlockSize(b) <= minRecords) {
 						// propagate upwards
 						return DeleteStruct{ true, i };
@@ -767,7 +821,7 @@ private:
 				}
 				if (merged.merged) {
 					// nodes merged, must remove key
-					if (GetBlockSize(b) == minRecords) {
+					if (GetBlockSize(b) <= minRecords) {
 						// propagate upwards
 						return DeleteStruct{ true, i };
 					}
@@ -854,8 +908,9 @@ public:
 				// children merged, must remove key
 				if (GetBlockSize(_root) == 1) {
 					// change root
+					auto tmp = _root[0];
 					_root = Block(_root[0]);
-					_rootID = _root[0];
+					_rootID = tmp;
 				}
 				else {
 					size_t i = rtc.idx;
@@ -865,11 +920,14 @@ public:
 						_root[2 * i + 1] = _root[2 * i + 3];
 						_root[2 * i + 2] = _root[2 * i + 4];
 					}
+					_root[2 * i + 1] = -1;
+					_root[2 * i + 2] = -1;
 					SetBlockSize(_root, GetBlockSize(_root) - 1);
 					SaveBlock(_root);
 				}
 			}
 		}
+		auto p = 5;
 	}
 
 };

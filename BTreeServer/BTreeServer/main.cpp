@@ -40,7 +40,10 @@ void run_btree_server (IO&io)
 		tree.Write(i, i+10000);
 	}
 	size_t i = 0;
-	while (i < max && tree.Read(i) == i + 10000) {
+	while (i < max) {
+		if (tree.Read(i) != i + 10000) {
+			std::cout << "ERR!  Key: " << i << ", got: " << tree.Read(i) << std::endl;
+		}
 		if (i % 50 == 0) std::cout << i << std::endl;
 		i++;
 	}
@@ -50,19 +53,36 @@ void run_btree_server (IO&io)
 	for (i = 0; i < max; i+=50)
 	{
 		tree.Erase(i);
+		if (tree.Read(504) != 10504) {
+			i = i;
+		}
 	}
 
 	std::cout << "Finished erasing" << std::endl;
 
 	i = 0;
 	bool correct = true;
-	while (i < max && correct) {		
+	/*while (i < max && correct) {		
 		if (i % 50 == 0) {
 			correct = tree.Read(i) == 0;
 			std::cout << i << std::endl;
 		}
 		else {
-			correct = tree.Read(i) == i+5;
+			correct = tree.Read(i) == i+10000;
+		}
+		i++;
+	}*/
+	uint64_t rtc;
+	while (i < max) {
+		rtc = tree.Read(i);
+		if(rtc != i + 10000){
+			if (i % 50 == 0) {
+				if (rtc == 0) {
+					i++;
+					continue;
+				}
+			}
+			std::cout << "ERR!  Key: " << i << ", got: " << rtc << std::endl;
 		}
 		i++;
 	}
