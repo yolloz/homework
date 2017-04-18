@@ -44,7 +44,7 @@ template<template<class, size_t> class ImplT, class Client, class Verifier = dum
 class ACIO
 {
 public:
-	static const size_t block_size = 256;
+	static const size_t block_size = 1024;
 	class op;
 	using Impl = ImplT<op, block_size>;
 	using req = ACIO_client_request;

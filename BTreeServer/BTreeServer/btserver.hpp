@@ -10,8 +10,9 @@
 #include <map>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 
-using IO = ACIO<mock, seq_client<100, 10, 30>, verifier>;
+using IO = ACIO<mock, burst_client<100, 1000, 3, 10000000>, verifier>;
 
 template<size_t blockSize>
 class BTree {
@@ -28,32 +29,39 @@ private:
 	static const size_t maxRecords = ((blockSize_64 / 2) - 2) % 2 == 0 ? (blockSize_64 / 2) - 2 : (blockSize_64 / 2) - 3;
 	static const size_t minRecords = maxRecords / 2;
 
-	blockArray _root;								// root block
 	std::uint64_t _rootID = 0;							// ID of root block
 	std::unordered_map<std::uint64_t, blockArray> _cache;		// cache
 	std::size_t _cachePtr = 0;							// index of oldest cached block;
 	std::map<std::uint64_t, size_t> _map;		// maps block_ID to index in memory
 	std::vector<std::uint64_t> _cacheHistory;	// maps block_ID in cache
 	size_t freeCache = cacheSize;				// number of free cache blocks
-	size_t oldestCacheIndex = 0;				// index of oldest id in chace history
+	size_t oldestCacheIndex = 0;				// index of oldest id in cache history
 	std::size_t _currentSize = 0;				// number of currently allocated blocks
 	std::size_t _occupied = 0;					// number of currently occupied blocks
 	std::vector<bool> _blockTable;				// table of occupied blocks
 	IO & io;									// acio reference
 	std::uint64_t _nextID = 1;					// authority giving blocks their IDs
+	std::unordered_set<uint64_t> _dirtyBlocks;			// dirty blocks that need to be written
+	std::vector<IO::req> _requestQueue;
+	size_t _requestCount = 0;
+	float _time;
+	
 
+	// provides information after insertion
 	struct InsertStruct {
 		bool split = false;
 		std::uint64_t leftBlockID;
 		std::uint64_t rightBlockID;
 		std::uint64_t pushedKey;
 	};
-
+	
+	// provides information after deletion
 	struct DeleteStruct {
 		bool merge = false;
 		size_t idx = 0;
 	};
 
+	// provides information after merging
 	struct MergeStruct {
 		bool merged = false;
 		std::uint64_t newKey = 0;
@@ -73,6 +81,24 @@ private:
 	bool Enlarge() {
 		size_t newSize = ceil((double)_currentSize * 1.5);
 		return Resize(newSize);
+	}
+
+	// if there is less than 25% of allocated space occupied, storage is shrunk
+	bool Shrink() {
+		if (_occupied < (size_t)ceil((double)_currentSize * 0.25)) {
+			for (auto i = _map.begin(); i != _map.end(); i++) {
+				if (i->second >= size) {
+					auto newIdx = FindFreeSpace();
+					_blockTable[i->second] = false;
+					_blockTable[newIdx] = true;
+					i->second = newIdx;
+				}
+			}
+			io.resize(size);
+			_currentSize = size;
+			return true;
+		}
+		return false;
 	}
 
 	// returns an ID for a new block
@@ -116,6 +142,7 @@ private:
 		return ((std::uint8_t *) block.data())[blockSize_8 - 1];
 	}
 
+
 	bool SyncOp(IO&io, IO::op*o)
 	{
 		std::list<IO::op*> ops;
@@ -143,14 +170,12 @@ private:
 		return SyncOp(io, &o);
 	}
 
-	bool SaveBlock(blockArray & b) {
-		auto i = _map.find(GetBlockID(b));
-		if (i != _map.end()) {
-			return SyncWrite(io, i->second, b);
-		}
-		return false;
+	// marks block as dirty - needs saving
+	void TouchBlock(blockArray & b) {
+		_dirtyBlocks.insert(GetBlockID(b));
 	}
 
+	// loads block from storage to cache
 	bool LoadBlock(std::uint64_t id) {
 		auto i = _map.find(id);
 		if (i != _map.end()) {
@@ -162,6 +187,7 @@ private:
 		return false;
 	}
 
+	// disposes block of data
 	bool RemoveBlock(blockArray & b) {
 		auto id = GetBlockID(b);
 		_cache.erase(id);
@@ -169,15 +195,19 @@ private:
 			if (i != _map.end()) {
 				_blockTable[i->second] = false;
 				_map.erase(id);
+				_occupied--;
 			}
 		}
 		return true;
 	};
 
+	// alolocates new space in cache for block
 	size_t GetCacheSpace(std::uint64_t id) {
+		if ((cacheSize - _cache.size()) < 10) {
+			FreeCache();
+		}
 		size_t rtc = _cachePtr++;
 		_cachePtr %= cacheSize;
-		freeCache--;
 		//_cacheHistory.push_back(8);
 		if (_cacheHistory.size() < rtc + 1) {
 			_cacheHistory.push_back(id);
@@ -190,9 +220,6 @@ private:
 
 	// searches in cache and eventually loads block to cache if it is not yet cached
 	blockArray & Block(std::uint64_t id) {
-		if (id == _rootID) {
-			return _root;
-		}
 		auto i = _cache.find(id);
 		if (i != _cache.end()) {
 			// block is cached, no need to load
@@ -235,10 +262,9 @@ private:
 		if (_occupied < _currentSize || Enlarge()) {
 			auto newSpot = FindFreeSpace();
 			RegisterSpace(GetBlockID(b), newSpot);
-			if (SaveBlock(b)) {
-				_occupied++;
-				return true;
-			}
+			TouchBlock(b);
+			_occupied++;
+			return true;			
 		}
 		return false;
 	}
@@ -263,6 +289,7 @@ private:
 		}
 	}
 
+	// returns value for key from leaf node
 	std::uint64_t GetValue(std::uint64_t key, blockArray & b) {
 		for (size_t i = 0; i < GetBlockSize(b); i++)
 		{
@@ -278,6 +305,8 @@ private:
 		return 0;
 	}
 
+	// returns newly created empty initialized block 
+	// TouchNewBlock method should be used after data is written to it
 	blockArray & GetNewBlock(bool leaf) {		
 		auto newId = GetNewID();
 		auto && rtc = _cache[newId];
@@ -286,6 +315,7 @@ private:
 		return rtc;
 	}
 
+	// inserts value to leaf node
 	InsertStruct InsertToLeaf(std::uint64_t key, std::uint64_t value, blockArray & b) {
 		auto size = GetBlockSize(b);
 		// find the spot
@@ -324,11 +354,12 @@ private:
 				i++;
 			}
 			SetBlockSize(b, GetBlockSize(b) + 1);
-			SaveBlock(b);
+			TouchBlock(b);
 			return InsertStruct{ false, 0,0,0 };
 		}
 	}
 
+	// splits leaf node when it is full
 	InsertStruct SplitLeaf(std::uint64_t key, std::uint64_t value, blockArray & b) {
 		auto && newBlock = GetNewBlock(true);
 		std::uint64_t midVal = 0;
@@ -383,11 +414,12 @@ private:
 		// Save new block
 		SaveNewBlock(newBlock);
 		// Save old block
-		SaveBlock(b);
+		TouchBlock(b);
 		// return information about splitting;
 		return InsertStruct{ true, GetBlockID(newBlock), GetBlockID(b), midVal };
 	}
 
+	// inserts key to inner node, propagates value towards leaves
 	InsertStruct InsertToInnerNode(std::uint64_t key, std::uint64_t value, blockArray & b) {
 		auto id = GetPointerForKey(key, b);
 		InsertStruct rtc;
@@ -425,13 +457,14 @@ private:
 					}
 				}
 				SetBlockSize(b, GetBlockSize(b) + 1);
-				SaveBlock(b);
+				TouchBlock(b);
 				rtc.split = false;
 			}
 		}
 		return rtc;
 	}
 
+	// splits inner node when it is full
 	InsertStruct SplitInnerNode(std::uint64_t key, std::uint64_t leftNode, std::uint64_t rightNode, blockArray & b) {
 		auto && newBlock = GetNewBlock(false);
 		InsertStruct rtc;
@@ -499,13 +532,14 @@ private:
 		// Save new block
 		SaveNewBlock(newBlock);
 		// Save old block
-		SaveBlock(b);
+		TouchBlock(b);
 		// return information about splitting;
 		rtc.leftBlockID = GetBlockID(newBlock);
 		rtc.rightBlockID = GetBlockID(b);
 		return rtc;
 	}
 
+	// deletes value from leaf node
 	DeleteStruct DeleteFromLeaf(std::uint64_t key, blockArray & b) {
 		size_t i = 0;
 		auto size = GetBlockSize(b);
@@ -523,7 +557,7 @@ private:
 					b[2 * i + 1] = b[2 * (i + 1) + 1];
 				}
 				SetBlockSize(b, size - 1);
-				SaveBlock(b);
+				TouchBlock(b);
 				return DeleteStruct{ false, 0 };
 			}
 			else {
@@ -535,6 +569,8 @@ private:
 		return DeleteStruct{ false, 0 };
 	}
 
+	// if leaf has too few pairs after deleting, it merges or
+	// borrows key from sibling. If merge occured, right node is deleted and left filled
 	MergeStruct MergeLeaves(std::uint64_t leftID, std::uint64_t rightID, std::uint64_t key, size_t removedIdx, bool leftMerge) {
 		auto && left = Block(leftID);
 		auto && right = Block(rightID);
@@ -563,7 +599,7 @@ private:
 
 				SetBlockSize(left, maxRecords - 1);
 
-				SaveBlock(left);
+				TouchBlock(left);
 				RemoveBlock(right);
 				return MergeStruct{ true, 0 };
 			}
@@ -586,8 +622,8 @@ private:
 
 				SetBlockSize(left, leftSize - 1);
 
-				SaveBlock(left);
-				SaveBlock(right);
+				TouchBlock(left);
+				TouchBlock(right);
 
 				return MergeStruct{ false, right[0] };
 			}
@@ -614,7 +650,7 @@ private:
 					i++;
 				}
 				SetBlockSize(left, maxRecords - 1);
-				SaveBlock(left);
+				TouchBlock(left);
 				RemoveBlock(right);
 				return MergeStruct{ true, 0 };
 			}
@@ -632,14 +668,16 @@ private:
 
 				SetBlockSize(right, rightSize - 1);
 
-				SaveBlock(left);
-				SaveBlock(right);
+				TouchBlock(left);
+				TouchBlock(right);
 
 				return MergeStruct{ false, right[0] };
 			}
 		}
 	}
 
+	// if inner node has too few children after deleting, it merges or
+	// borrows a child from sibling. If merge occured, right node is deleted and left filled
 	MergeStruct MergeInnerNodes(std::uint64_t leftID, std::uint64_t rightID, std::uint64_t key, size_t removedIdx, bool leftMerge) {
 		auto && left = Block(leftID);
 		auto && right = Block(rightID);
@@ -664,7 +702,7 @@ private:
 				}
 				SetBlockSize(left, maxRecords);
 
-				SaveBlock(left);
+				TouchBlock(left);
 				RemoveBlock(right);
 				return MergeStruct{ true, 0 };
 			}
@@ -694,8 +732,8 @@ private:
 
 				SetBlockSize(left, leftSize - 1);
 
-				SaveBlock(left);
-				SaveBlock(right);
+				TouchBlock(left);
+				TouchBlock(right);
 
 				return rtc;
 			}
@@ -724,7 +762,7 @@ private:
 
 				SetBlockSize(left, maxRecords);
 
-				SaveBlock(left);
+				TouchBlock(left);
 				RemoveBlock(right);
 				return MergeStruct{ true, 0 };
 			}
@@ -743,14 +781,15 @@ private:
 
 				SetBlockSize(right, rightSize - 1);
 
-				SaveBlock(left);
-				SaveBlock(right);
+				TouchBlock(left);
+				TouchBlock(right);
 
 				return rtc;
 			}
 		}
 	}
 
+	// deletes key from inner node or returns information that it needs merging
 	DeleteStruct DeleteFromInnerNode(std::uint64_t key, blockArray & b) {
 		size_t i = 0;
 		DeleteStruct rtc;
@@ -790,14 +829,14 @@ private:
 							b[2 * i + 2] = b[2 * i + 4];
 						}
 						SetBlockSize(b, GetBlockSize(b) - 1);
-						SaveBlock(b);
+						TouchBlock(b);
 						return DeleteStruct{ false, 0 };
 					}
 				}
 				else {
 					//change the key
 					b[2 * i + 1] = merged.newKey;
-					SaveBlock(b);
+					TouchBlock(b);
 					return DeleteStruct{ false, 0 };
 				}
 			}
@@ -833,14 +872,14 @@ private:
 							b[2 * i + 2] = b[2 * i + 4];
 						}
 						SetBlockSize(b, GetBlockSize(b) - 1);
-						SaveBlock(b);
+						TouchBlock(b);
 						return DeleteStruct{ false, 0 };
 					}
 				}
 				else {
 					//change the key
 					b[2 * i + 1] = merged.newKey;
-					SaveBlock(b);
+					TouchBlock(b);
 					return DeleteStruct{ false, 0 };
 				}
 			}
@@ -850,86 +889,269 @@ private:
 		}
 	}
 
+	void FreeCache() {
+		std::cout << "Old space: " << _cache.size() << ", occupied: " << _occupied << std::endl;
+		if ((cacheSize - _cache.size()) < 50) {
+			const int newSpace = 100;
+			std::unordered_map<IO::op*, std::uint64_t> writeOps;
+			std::vector<IO::op> opsArray;
+			opsArray.reserve(newSpace);
+			auto idx = oldestCacheIndex;
+			size_t j = 0;
+			for (size_t i = 0; i < newSpace; i++)
+			{
+				if (_dirtyBlocks.find(_cacheHistory[idx]) != _dirtyBlocks.end()) {
+					auto itr = _map.find(_cacheHistory[idx]);
+					if (itr != _map.end()) {
+						IO::op o(itr->second, Block(itr->first).data());
+						opsArray.push_back(o);
+						IO::op * ptr = &opsArray[j++];
+						io.write(ptr);
+						writeOps[ptr] = _cacheHistory[idx];
+					}
+				}
+				else {
+					auto bz = _cache.erase(_cacheHistory[idx]);
+				}
+				idx++;
+				idx %= cacheSize;
+			}
+			std::list<IO::op*> ops;
+			while (io.poll(ops, 1, false)) {
+				for (IO::op* i : ops)
+				{
+					auto op = writeOps.find(i);
+					if (op != writeOps.end()) {
+						bool done = io.finish(op->first);
+						auto bz = _dirtyBlocks.erase(op->second);
+						_cache.erase(op->second);
+						writeOps.erase(op->first);
+					}
+				}
+				if (writeOps.size() == 0) {
+					break;
+				}
+			}
+			oldestCacheIndex = idx;
+		}
+		std::cout << "New space: " << _cache.size() << ", occupied: " << _occupied << std::endl;
+		
+	}
+	IO::req & NewRequest() {
+		if (_requestQueue.size() <= _requestCount) {
+			_requestQueue.push_back(IO::req());
+		}
+		return _requestQueue[_requestCount];
+	}
+
+	// Confirms new request, returns true if more requests should be waited for
+	bool ConfirmNewRequest(IO::req & r, float timestamp) {
+		++_requestCount;
+		//std::cout << "Too many requests: " << (_requestCount < 100) << ", Time exceeded: " << (_time + 0.1 > timestamp) << std::endl;
+		return /*_requestCount < 1000 && */_time + 0.1 > timestamp;
+	}
+
+	void Process() {
+		for (size_t i = 0; i < _requestCount; i++) {
+			auto && r = _requestQueue[i];
+			switch (r.type) {
+			case IO::req::write: {
+				//handle client writing into the database
+				Write(r.key, r.value);
+				//std::cerr << "write " << r.key << " = " << r.value << std::endl;
+				//send the confirmation
+				//io.send_reply(&r);
+				break;
+			}
+			case IO::req::read: {
+				r.value = 0;
+				//find the key
+				r.value = Read(r.key);
+				//std::cerr << "read " << r.key << " --> " << r.value << std::endl;
+				//send the reply with the value
+				//io.send_reply(&r);
+				break;
+			}
+			case IO::req::erase:
+				//in erasing case, find the key
+				Erase(r.key);
+				r.value = 0;
+				//std::cerr << "erase " << r.key << std::endl;
+				//and send the confirmation.
+				//io.send_reply(&r);
+				break;
+			default:
+				break;
+			}
+		}
+	}
+
+	void WriteData() {
+		std::unordered_map<IO::op*, std::uint64_t> writeOps;
+		std::vector<IO::op> opsArray;
+		opsArray.reserve(_dirtyBlocks.size() * 1.2);
+		// issue write ops for all dirty blocks
+		size_t j = 0;
+		for (auto i = _dirtyBlocks.begin(); i != _dirtyBlocks.end(); i++, j++)
+		{
+			auto itr = _map.find(*i);
+			if (itr != _map.end()) {
+				IO::op o(itr->second, Block(itr->first).data());
+				opsArray.push_back(o);
+				IO::op * ptr = &opsArray[j];
+				io.write(ptr);
+				writeOps[ptr] = *i;
+			}
+		}
+		std::list<IO::op*> ops;
+		while (io.poll(ops, 1, false)) {
+			for (IO::op* i : ops)
+			{
+				auto op = writeOps.find(i);
+				if (op != writeOps.end()) {
+					bool done = io.finish(op->first);
+					_dirtyBlocks.erase(op->second);
+					writeOps.erase(op->first);
+				}
+			}
+			if (writeOps.size() == 0) {
+				break;
+			}
+		}
+		_dirtyBlocks.clear();
+	}
+
+	void Answer() {
+		for (size_t i = 0; i < _requestCount; i++)
+		{
+			io.send_reply(&_requestQueue[i]);
+		}
+	}
+
+	void Reset(float timestamp) {
+		_requestQueue.clear();
+		_requestCount = 0;
+		_time = timestamp;
+	}
+
 public:
 	BTree(IO & io) : io(io)
 	{
 		Resize(1);
-		_rootID = GetNewID();
-		InitNewBlock(_root, _rootID, true);
-		SaveNewBlock(_root);
+		auto && root = GetNewBlock(true);
+		SaveNewBlock(root);
+		_rootID = GetBlockID(root);
 	}
 
+	// retrieves value from tree
 	std::uint64_t Read(std::uint64_t key) {
-		auto leafID = SeekLeaf(key, _root);
+		auto leafID = SeekLeaf(key, Block(_rootID));
 		return GetValue(key, Block(leafID));
 	}
 
+	// inserts key- value pair into tree
 	void Write(std::uint64_t key, std::uint64_t value) {
 		InsertStruct rtc;
-		if (IsLeaf(_root)) {
-			rtc = InsertToLeaf(key, value, _root);
+		auto && root = Block(_rootID);
+		if (IsLeaf(root)) {
+			rtc = InsertToLeaf(key, value, root);
 		}
 		else {
-			rtc = InsertToInnerNode(key, value, _root);
+			rtc = InsertToInnerNode(key, value, root);
 		}
 		if (rtc.split) {
 			// change root manually
-			_rootID = GetNewID();
-			InitNewBlock(_root, _rootID, false);
-			_root[0] = rtc.leftBlockID;
-			_root[1] = rtc.pushedKey;
-			_root[2] = rtc.rightBlockID;
-			SetBlockSize(_root, 1);
-			SaveNewBlock(_root);
+			auto && newRoot = GetNewBlock(false);
+			newRoot[0] = rtc.leftBlockID;
+			newRoot[1] = rtc.pushedKey;
+			newRoot[2] = rtc.rightBlockID;
+			SetBlockSize(newRoot, 1);
+			SaveNewBlock(newRoot);
+			_rootID = GetBlockID(newRoot);
 		}
 	}
 
+	// removes key and it's associated value from tree
 	void Erase(std::uint64_t key) {
 		DeleteStruct rtc;
-		if (IsLeaf(_root)) {
-			rtc = DeleteFromLeaf(key, _root);
+		auto && root = Block(_rootID);
+		if (IsLeaf(root)) {
+			rtc = DeleteFromLeaf(key, root);
 			if (rtc.merge) {
 				// just remove key, root doesn't need merging
 				size_t i = rtc.idx;
-				for (; i < GetBlockSize(_root); i++)
+				for (; i < GetBlockSize(root); i++)
 				{
-					_root[2 * i] = _root[2 * i + 2];
-					_root[2 * i + 1] = _root[2 * i + 3];
+					root[2 * i] = root[2 * i + 2];
+					root[2 * i + 1] = root[2 * i + 3];
 				}
-				_root[2 * i] = -1;
-				_root[2 * i + 1] = -1;
+				root[2 * i] = -1;
+				root[2 * i + 1] = -1;
 
-				SetBlockSize(_root, GetBlockSize(_root));
+				SetBlockSize(root, GetBlockSize(root) - 1);
 			}
 		}
 		else {
-			rtc = DeleteFromInnerNode(key, _root);
-			if (rtc.merge) {
-				// children merged, must remove key
-				if (GetBlockSize(_root) == 1) {
-					// change root
-					auto tmp = _root[0];
-					_root = Block(_root[0]);
-					_rootID = tmp;
-				}
-				else {
-					size_t i = rtc.idx;
-					// just delete the key
-					for (; i < GetBlockSize(_root); i++)
-					{
-						_root[2 * i + 1] = _root[2 * i + 3];
-						_root[2 * i + 2] = _root[2 * i + 4];
-					}
-					_root[2 * i + 1] = -1;
-					_root[2 * i + 2] = -1;
-					SetBlockSize(_root, GetBlockSize(_root) - 1);
-					SaveBlock(_root);
-				}
-			}
+			rtc = DeleteFromInnerNode(key, root);
+if (rtc.merge) {
+	// children merged, must remove key
+	if (GetBlockSize(root) == 1) {
+		// change root
+		_rootID = root[0];
+		RemoveBlock(root);
+	}
+	else {
+		size_t i = rtc.idx;
+		// just delete the key
+		for (; i < GetBlockSize(root); i++)
+		{
+			root[2 * i + 1] = root[2 * i + 3];
+			root[2 * i + 2] = root[2 * i + 4];
 		}
-		auto p = 5;
+		root[2 * i + 1] = -1;
+		root[2 * i + 2] = -1;
+		SetBlockSize(root, GetBlockSize(root) - 1);
+		TouchBlock(root);
+	}
+}
+		}
 	}
 
+	
+
+	void StartListening() {
+		Reset(io.timestamp());
+		std::list<IO::op*> ops;
+		while (io.poll(ops, 0.1, true)) {
+			auto k = ops.size();
+			// fill task queue
+			auto && r = NewRequest();
+			if (!io.recv_request(&r) || !ConfirmNewRequest(r, io.timestamp())) {
+				if (_requestCount > 0) {
+					// make room in cache
+					FreeCache();
+					//std::cout << "Processing requests: " << _requestCount << std::endl;
+					//	start processing
+					Process();
+					// write data
+					WriteData();
+					// answer requests
+					Answer();					
+				}
+				// reset queue and start listening again
+				Reset(io.timestamp());
+			};			
+		}
+		// finish what's left in queue
+
+		//	start processing
+		Process();
+		// write data
+		WriteData();
+		// answer requests
+		Answer();
+		std::cout << "Occupied: " << _occupied;
+	}
 };
 
 

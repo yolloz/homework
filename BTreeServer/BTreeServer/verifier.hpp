@@ -57,7 +57,15 @@ public:
 
 	void print_stats() {
 		size_t dangling = 0;
-		for (auto&r : timing) dangling += r.second.size();
+		std::cout << "LOG START" << std::endl;
+		for (auto&r : timing) {
+			dangling += r.second.size();
+			if (r.second.size() > 0) {
+				std::cout << "Size: " << r.second.size() << ", TYPE: " << r.first.type << ", key: " << r.first.key << " , value: " << r.first.value << ", ts: "<< r.second.front() << std::endl;
+			}
+		}
+		std::cout << "Write: " << req::write << ", read: " << req::read << ", erase: " << req::erase << std::endl;
+
 		std::cout << "*** Verifier stats ***" << std::endl;
 		std::cout << "Inconsistent values returned: " << read_errors << std::endl;
 		std::cout << "Average request waiting time: "

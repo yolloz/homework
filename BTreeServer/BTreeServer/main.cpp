@@ -12,10 +12,10 @@
  * all test params are filled in here
  */
 //default test -- uses a mocked in-memory AIO class that simulates the delays
-using IO = ACIO<mock, seq_client<100, 10, 30>, verifier>;
+//using IO = ACIO<mock, seq_client<100, 10, 30>, verifier>;
 
 //expected test params
-//using IO = ACIO<mock, burst_client<10000, 10000, 3, 10000000> /*,verifier*/>;
+using IO = ACIO<mock, burst_client<100, 1000, 3, 10000000> ,verifier>;
 
 //external storage support (only on systems with aio, may fail in very interesting ways)
 //#include "acio_aio.hpp"
@@ -31,62 +31,109 @@ void run_btree_server (IO&io)
 {
 	//TODO put your server implementation here, instead of the demo
 	//run_dummy_demo (io);
+
 	auto tree = BTree<IO::block_size>(io);
 
-	size_t max = 1000;
+	tree.StartListening();
 	
-	for (size_t i = 0; i < max; i++)
-	{
-		tree.Write(i, i+10000);
-	}
-	size_t i = 0;
-	while (i < max) {
-		if (tree.Read(i) != i + 10000) {
-			std::cout << "ERR!  Key: " << i << ", got: " << tree.Read(i) << std::endl;
+	/*std::list<IO::op*> ops;
+	//wait for any request or finished operation, max 0.1s
+	while (io.poll(ops, 0.1, true)) {
+		std::cerr << "current timestamp: " << io.timestamp() << std::endl;
+		IO::req r;
+		//if there's no request available, retry
+		if (!io.recv_request(&r)) continue;
+		std::cerr << "got a request!" << std::endl;
+		switch (r.type) {
+		case IO::req::write: {
+			//handle client writing into the database
+			tree.Write(r.key, r.value);
+			std::cerr << "write " << r.key << " = " << r.value << std::endl;
+			//send the confirmation
+			io.send_reply(&r);
+			break;
 		}
-		if (i % 50 == 0) std::cout << i << std::endl;
-		i++;
+		case IO::req::read: {
+			r.value = 0;
+			//find the key
+			r.value = tree.Read(r.key);
+			std::cerr << "read " << r.key << " --> " << r.value << std::endl;
+			//send the reply with the value
+			io.send_reply(&r);
+			break;
+		}
+		case IO::req::erase:
+			//in erasing case, find the key
+			tree.Erase(r.key);
+			r.value = 0;
+			std::cerr << "erase " << r.key << std::endl;
+			//and send the confirmation.
+			io.send_reply(&r);
+			break;
+		default:
+			break;
+		}
 	}
 
-	std::cout << "Finished Loading" << std::endl;
+	//if poll() returned false, it means that there are no more pending
+	//requests and all I/O operations have finished.
+	std::cerr << "polling ended, terminating" << std::endl;
+	*/
 
-	for (i = 0; i < max; i+=50)
-	{
-		tree.Erase(i);
-		if (tree.Read(504) != 10504) {
-			i = i;
-		}
-	}
+	//size_t max = 1000;
+	//
+	//for (size_t i = 0; i < max; i++)
+	//{
+	//	tree.Write(i, i+10000);
+	//}
+	//size_t i = 0;
+	//while (i < max) {
+	//	if (tree.Read(i) != i + 10000) {
+	//		std::cout << "ERR!  Key: " << i << ", got: " << tree.Read(i) << std::endl;
+	//	}
+	//	if (i % 50 == 0) std::cout << i << std::endl;
+	//	i++;
+	//}
 
-	std::cout << "Finished erasing" << std::endl;
+	//std::cout << "Finished Loading" << std::endl;
 
-	i = 0;
-	bool correct = true;
-	/*while (i < max && correct) {		
-		if (i % 50 == 0) {
-			correct = tree.Read(i) == 0;
-			std::cout << i << std::endl;
-		}
-		else {
-			correct = tree.Read(i) == i+10000;
-		}
-		i++;
-	}*/
-	uint64_t rtc;
-	while (i < max) {
-		rtc = tree.Read(i);
-		if(rtc != i + 10000){
-			if (i % 50 == 0) {
-				if (rtc == 0) {
-					i++;
-					continue;
-				}
-			}
-			std::cout << "ERR!  Key: " << i << ", got: " << rtc << std::endl;
-		}
-		i++;
-	}
-	std::cout << "Last correct: " << --i << std::endl;
+	//for (i = 0; i < max; i+=50)
+	//{
+	//	tree.Erase(i);
+	//	if (tree.Read(504) != 10504) {
+	//		i = i;
+	//	}
+	//}
+
+	//std::cout << "Finished erasing" << std::endl;
+
+	//i = 0;
+	//bool correct = true;
+	///*while (i < max && correct) {		
+	//	if (i % 50 == 0) {
+	//		correct = tree.Read(i) == 0;
+	//		std::cout << i << std::endl;
+	//	}
+	//	else {
+	//		correct = tree.Read(i) == i+10000;
+	//	}
+	//	i++;
+	//}*/
+	//uint64_t rtc;
+	//while (i < max) {
+	//	rtc = tree.Read(i);
+	//	if(rtc != i + 10000){
+	//		if (i % 50 == 0) {
+	//			if (rtc == 0) {
+	//				i++;
+	//				continue;
+	//			}
+	//		}
+	//		std::cout << "ERR!  Key: " << i << ", got: " << rtc << std::endl;
+	//	}
+	//	i++;
+	//}
+	//std::cout << "Last correct: " << --i << std::endl;
 }
 
 /*
