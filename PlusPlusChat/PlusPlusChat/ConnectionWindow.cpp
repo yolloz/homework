@@ -145,7 +145,7 @@ namespace PlusPlusChat {
 					SendMessage(hIpAddress, WM_GETTEXT, sizeof(ipBuffer), reinterpret_cast<LPARAM>(ipBuffer));
 
 					if (ConnectToServer(ContextSingleton::GetInstance().connectionWindow, port, ipBuffer)) {
-						ContextSingleton::GetInstance().state = AppState::CONNECTING;
+						//ContextSingleton::GetInstance().state = AppState::CONNECTING;
 					}
 				}
 			}

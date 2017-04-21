@@ -54,6 +54,9 @@ public:
 			r->value = r->type == req::write ? dist_value (generator) : 0;
 			dispatched = (reqs / burst_size) / (float) freq;
 			++reqs;
+			if (reqs % 8192 == 0) {
+				std::cout << " Requests processed: " << ((reqs*100) / n_requests) << "%" << std::endl;
+			}			
 			return true;
 		}
 		return false;

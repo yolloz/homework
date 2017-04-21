@@ -142,14 +142,14 @@
     <ClInclude Include="acio.hpp" />
     <ClInclude Include="acio_aio.hpp" />
     <ClInclude Include="acio_mock.hpp" />
-    <ClInclude Include="btserver.hpp" />
+    <ClInclude Include="btreeserver.hpp" />
     <ClInclude Include="burst_client.hpp" />
     <ClInclude Include="seq_client.hpp" />
     <ClInclude Include="verifier.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="btserver.cpp" />
-    <ClCompile Include="main.cpp" />
+    <ClCompile Include="btreeserver.cpp" />
+    <ClCompile Include="du2main.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

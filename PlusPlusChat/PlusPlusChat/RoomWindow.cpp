@@ -38,8 +38,8 @@ namespace PlusPlusChat {
 			WS_EX_CLIENTEDGE,
 			L"EDIT", L"",
 			WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-			10, 15, 280, 23,
-			hUsernameGrp, (HMENU)IDC_RW_USERNAME_TB, GetModuleHandle(NULL), NULL);
+			30, 35, 280, 23,
+			hWnd, (HMENU)IDC_RW_USERNAME_TB, GetModuleHandle(NULL), NULL);
 
 		// Create public room groupbox
 		HWND hPublicRoomGrp = CreateWindowEx(
@@ -51,19 +51,19 @@ namespace PlusPlusChat {
 
 		// Create Public rooms listbox
 		HWND hPublicRoomList = CreateWindowEx(
-				WS_EX_CLIENTEDGE,
-				L"LISTBOX", L"",
-				WS_CHILD | WS_VISIBLE | WS_GROUP | WS_VSCROLL,
-				10, 15, 280, 100,
-				hPublicRoomGrp, (HMENU)IDC_RW_PUBLICROOM_LIST, GetModuleHandle(NULL), NULL);
+			WS_EX_CLIENTEDGE,
+			L"LISTBOX", L"",
+			WS_CHILD | WS_VISIBLE | WS_GROUP | WS_VSCROLL,
+			30, 93, 280, 100,
+			hWnd, (HMENU)IDC_RW_PUBLICROOM_LIST, GetModuleHandle(NULL), NULL);
 
 		// Create Join public room button
 		HWND hJoinPublicRoomBtn = CreateWindowEx(
 			0,
 			L"BUTTON", L"Join Room",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-			215, 120, 75, 23,
-			hPublicRoomGrp, (HMENU)IDC_RW_JOINPUBLICROOM_BTN, GetModuleHandle(NULL), NULL);
+			235, 198, 75, 23,
+			hWnd, (HMENU)IDC_RW_JOINPUBLICROOM_BTN, GetModuleHandle(NULL), NULL);
 
 		// Create private room groupbox
 		HWND hPrivateRoomGrp = CreateWindowEx(
@@ -78,16 +78,16 @@ namespace PlusPlusChat {
 			WS_EX_CLIENTEDGE,
 			L"EDIT", L"",
 			WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-			10, 15, 195, 23,
-			hPrivateRoomGrp, (HMENU)IDC_RW_PRIVATEROOM_TB, GetModuleHandle(NULL), NULL);
+			30, 256, 195, 23,
+			hWnd, (HMENU)IDC_RW_PRIVATEROOM_TB, GetModuleHandle(NULL), NULL);
 
 		// Create Join private room button
 		HWND hJoinPrivateRoomBtn = CreateWindowEx(
 			0,
 			L"BUTTON", L"Join Room",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-			215, 15, 75, 23,
-			hPrivateRoomGrp, (HMENU)IDC_RW_JOINPRIVATEROOM_BTN, GetModuleHandle(NULL), NULL);
+			235, 256, 75, 23,
+			hWnd, (HMENU)IDC_RW_JOINPRIVATEROOM_BTN, GetModuleHandle(NULL), NULL);
 
 		// Create new room groupbox
 		HWND hNewRoomGrp = CreateWindowEx(
@@ -102,24 +102,24 @@ namespace PlusPlusChat {
 			WS_EX_CLIENTEDGE,
 			L"EDIT", L"",
 			WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-			10, 15, 280, 23,
-			hNewRoomGrp, (HMENU)IDC_RW_NEWROOM_TB, GetModuleHandle(NULL), NULL);
+			30, 314, 280, 23,
+			hWnd, (HMENU)IDC_RW_NEWROOM_TB, GetModuleHandle(NULL), NULL);
 
 		// Create Join private room button
 		HWND hNewPrivateRoomBtn = CreateWindowEx(
 			0,
 			L"BUTTON", L"Create Private Room",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-			10, 43, 135, 23,
-			hNewRoomGrp, (HMENU)IDC_RW_NEWPRIVATEROOM_BTN, GetModuleHandle(NULL), NULL);
+			30, 342, 135, 23,
+			hWnd, (HMENU)IDC_RW_NEWPRIVATEROOM_BTN, GetModuleHandle(NULL), NULL);
 
 		// Create Join private room button
 		HWND hNewPublicRoomBtn = CreateWindowEx(
 			0,
 			L"BUTTON", L"Create Public Room",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-			155, 43, 135, 23,
-			hNewRoomGrp, (HMENU)IDC_RW_NEWPUBLICROOM_BTN, GetModuleHandle(NULL), NULL);
+			175, 342, 135, 23,
+			hWnd, (HMENU)IDC_RW_NEWPUBLICROOM_BTN, GetModuleHandle(NULL), NULL);
 
 		/*if (!hIpEdit || !hIpLbl)
 		{
