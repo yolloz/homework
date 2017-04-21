@@ -420,13 +420,18 @@ bool ProcessMessage(wchar_t * message, SOCKET s) {
 			auto action = Context::ResolveAction(tokens[1]);
 			switch (action) {
 			case Action::INIT: {
-				Context::GetContext().Clients()[s].state = ClientState::CONNECTING;
+				Context::GetContext().ClientConnected(s);
 				SendMsg(Action::TINI, L"", s);
 				break;
 			}
 
 			case Action::ACK: {
-				Context::GetContext().Clients()[s].state = ClientState::CONNECTED;
+				// no need for an action
+				break;
+			}
+
+			case Action::GETROOMS: {
+				SendMsg(Action::ROOMS, Context::GetContext().GetPublicRooms(), s);
 				break;
 			}
 					   
@@ -445,21 +450,32 @@ std::wstring BuildMessage(const std::wstring & action) {
 }
 
 void SendMsg(Action action, const std::wstring & payload, SOCKET s) {	
+	std::wstring p;
+	bool valid = true;
 	switch (action) {
 	case Action::ERR: {
-		auto p = BuildMessage(L"ERR", payload);
-		const wchar_t * msg( p.c_str());
-		send(s, (char *)msg, wcslen(msg) * 2, 0);
+		p = BuildMessage(L"ERR", payload);
 		break;
 	}
 
 	case Action::TINI: {
-		auto p = BuildMessage(L"TINI");
-		const wchar_t * msg(p.c_str());
-		send(s, (char *)msg, wcslen(msg) * 2, 0);
+		p = BuildMessage(L"TINI");
 		break;
 	}
 
+	case Action::ROOMS: {
+		p = BuildMessage(L"ROOMS", payload);
+		break;
+	}
+
+	default: {
+		valid = false;
+		break;
+	}
+	}
+	if (valid) {
+		const wchar_t * msg(p.c_str());
+		send(s, (char *)msg, wcslen(msg) * 2, 0);
 	}
 }
 

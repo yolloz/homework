@@ -162,6 +162,11 @@ namespace PlusPlusChat {
 		{
 			auto state = ContextSingleton::GetInstance().state;
 			if (state == AppState::DISCONNECTED || state == AppState::CONNECTING) {
+				if (state == AppState::CONNECTING) {
+					shutdown(ContextSingleton::GetInstance().Socket, SD_BOTH);
+					closesocket(ContextSingleton::GetInstance().Socket);
+					WSACleanup();
+				}
 				PostQuitMessage(0);
 				return 0;
 			}
@@ -183,55 +188,22 @@ namespace PlusPlusChat {
 				{
 					Communicator::ProcessMessage(incoming, (SOCKET)wParam);
 				}
-
-
-				/*UnregisterClass(L"Connection Window", GetModuleHandle(NULL));
-
-				DestroyWindow(ContextSingleton::GetInstance().connectionWindow);
-				ContextSingleton::GetInstance().connectionWindow = NULL;
-				ShowWindow(ContextSingleton::GetInstance().chatWindow, SW_SHOWDEFAULT);*/
-
-				/*for (int n = 0; n <= nMaxClients; n++)
-				{
-				wchar_t szIncoming[1024];
-				ZeroMemory(szIncoming, sizeof(szIncoming));
-
-				int inDataLength = recv(Socket[n],
-				(char*)szIncoming,
-				sizeof(szIncoming) / sizeof(szIncoming[0]),
-				0);
-
-				if (inDataLength != -1)
-				{
-				wcsncat(szHistory, szIncoming, inDataLength);
-				wcscat(szHistory, L"\r\n");
-
-				SendMessage(hEditIn,
-				WM_SETTEXT,
-				sizeof(szIncoming) - 1,
-				reinterpret_cast<LPARAM>(&szHistory));
-				}
-				}*/
 			}
 			break;
 
 			case FD_CLOSE:
 			{
-				/*MessageBox(hWnd,
-				L"Client closed connection",
-				L"Connection closed!",
-				MB_ICONINFORMATION | MB_OK);*/
+				MessageBox(hWnd, L"Server closed connection!", L"Connection closed!", MB_ICONINFORMATION | MB_OK);
+				DestroyWindow(hWnd);
+				break;
 			}
-			break;
 
 			case FD_CONNECT:
 			{
 				ContextSingleton::GetInstance().state = AppState::CONNECTING;
 				Communicator::SendMsg(Action::INIT, L"", (SOCKET)wParam);
+				break;
 			}
-			break;
-
-
 			}
 		}
 		}

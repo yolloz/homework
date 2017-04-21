@@ -18,7 +18,22 @@ namespace PlusPlusChat {
 					DeactivateConnectionWindow();
 					ActivateRoomWindow();
 
-					Communicator::SendMsg(Action::ACK, L"", s);					
+					Communicator::SendMsg(Action::ACK, L"", s);	
+					// ask server to fill list box
+					Communicator::SendMsg(Action::GETROOMS, L"", s);
+					break;
+				}
+
+				case Action::ROOMS: {
+					if (ContextSingleton::GetInstance().roomWindow != NULL) {
+						auto && vct = ContextSingleton::GetInstance().roomsList;
+						vct.clear();
+						for (size_t i = 2; i < tokens.size(); i++)
+						{
+							vct.push_back(tokens[i]);
+						}
+						ReloadPublicRoomsList();
+					}
 					break;
 				}
 
@@ -37,27 +52,48 @@ namespace PlusPlusChat {
 	}
 
 	void Communicator::SendMsg(Action action, const std::wstring & payload, SOCKET s) {
+		bool valid = true;
+		std::wstring p;
 		switch (action) {
-		case Action::ERR: {			
-			const wchar_t * msg(BuildMessage(L"ERR", payload).c_str());
-			send(s, (char *)msg, wcslen(msg) * 2, 0);
+		case Action::ERR: {
+			p = BuildMessage(L"ERR", payload);
 			break;
 		}
 
 		case Action::INIT: {
-			auto p = BuildMessage(L"INIT");
-			const wchar_t * msg(p.c_str());
-			send(s, (char *)msg, wcslen(msg) * 2, 0);
+			p = BuildMessage(L"INIT");			
 			break;
 		}
 
 		case Action::ACK: {
-			auto p = BuildMessage(L"ACK");
-			const wchar_t * msg(p.c_str());
-			send(s, (char *)msg, wcslen(msg) * 2, 0);
+			p = BuildMessage(L"ACK");
 			break;
 		}
 
+		case Action::CREATE: {
+			p = BuildMessage(L"CREATE", payload);
+			break;
+		}
+
+		case Action::JOIN: {
+			p = BuildMessage(L"JOIN", payload);
+			break;
+		}
+
+		case Action::GETROOMS: {
+			p = BuildMessage(L"GETROOMS");
+			break;
+		}
+
+		default: {
+			valid = false;
+			break;
+		}
+		}
+		// send message if action is valid
+		if (valid) {
+			const wchar_t * msg(p.c_str());
+			send(s, (char *)msg, wcslen(msg) * 2, 0);
 		}
 	}
 
@@ -79,6 +115,7 @@ namespace PlusPlusChat {
 		_actionLookup[L"INIT"] = Action::INIT;
 		_actionLookup[L"ACK"] = Action::ACK;
 		_actionLookup[L"ERR"] = Action::ERR;
+		_actionLookup[L"ROOMS"] = Action::ROOMS;
 		_actionLookup[L"INVALID_ACTION"] = Action::INVALID_ACTION;
 	}
 }

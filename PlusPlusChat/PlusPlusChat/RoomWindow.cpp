@@ -121,6 +121,17 @@ namespace PlusPlusChat {
 			175, 342, 135, 23,
 			hWnd, (HMENU)IDC_RW_NEWPUBLICROOM_BTN, GetModuleHandle(NULL), NULL);
 
+		// Create progress bar
+		HWND hProgress = CreateWindowEx(
+			0,
+			PROGRESS_CLASS, L"My progress",
+			WS_VISIBLE | WS_CHILD | PBS_MARQUEE ,
+			20, 385, 300, 18,
+			hWnd, (HMENU)IDC_RW_PROGRESS, GetModuleHandle(NULL), NULL);
+
+		// Hide progress bar
+		ShowWindow(hProgress, SW_HIDE);
+
 		/*if (!hIpEdit || !hIpLbl)
 		{
 			MessageBox(hWnd, L"Could not create window layout.", L"Error", MB_OK | MB_ICONERROR);
@@ -139,12 +150,14 @@ namespace PlusPlusChat {
 		SendMessage(hPrivateRoomGrp, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
 		SendMessage(hPrivateRoomTb, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+		SendMessage(hPrivateRoomTb, EM_LIMITTEXT, 30, NULL);
 		
 		SendMessage(hJoinPrivateRoomBtn, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
 		SendMessage(hNewRoomGrp, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
 		SendMessage(hNewRoomTb, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+		SendMessage(hNewRoomTb, EM_LIMITTEXT, 30, NULL);
 
 		SendMessage(hNewPrivateRoomBtn, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
@@ -154,58 +167,60 @@ namespace PlusPlusChat {
 	LRESULT CALLBACK RoomWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 		switch (message)
 		{
-		case WM_COMMAND:
+		case WM_COMMAND: {
 			switch (LOWORD(wParam))
 			{
-			case IDC_CW_CONNECTBTN:
+			case IDC_RW_NEWPUBLICROOM_BTN:
 			{
-				//if (ContextSingleton::GetInstance().state == AppState::DISCONNECTED) {
-				//	// Get port number
-				//	wchar_t portBuffer[6];
-				//	HWND hPortNumber = GetDlgItem(hWnd, IDC_CW_PORTEDIT);
-				//	SendMessage(hPortNumber, WM_GETTEXT, sizeof(portBuffer), reinterpret_cast<LPARAM>(portBuffer));
-				//	std::int_fast32_t port = 0;
-				//	for (size_t i = 0; i < wcslen(portBuffer); i++)
-				//	{
-				//		port *= 10;
-				//		port += portBuffer[i] - L'0';
-				//	}
-				//	if (port == 0) {
-				//		port = ContextSingleton::GetInstance().nPort;
-				//	}
-				//	if (port > 65535 || port < 1024) {
-				//		MessageBox(ContextSingleton::GetInstance().connectionWindow, L"Port number is invalid. Valid numbers are 1024 - 65535", L"Invalid port number", MB_ICONERROR);
-				//		break;
-				//	}
-
-				//	// Get IP address
-				//	wchar_t ipBuffer[16];
-				//	HWND hIpAddress = GetDlgItem(hWnd, IDC_CW_IPEDIT);
-				//	SendMessage(hIpAddress, WM_GETTEXT, sizeof(ipBuffer), reinterpret_cast<LPARAM>(ipBuffer));
-
-				//	if (ConnectToServer(ContextSingleton::GetInstance().connectionWindow, port, ipBuffer)) {
-				//		ContextSingleton::GetInstance().state = AppState::CONNECTING;
-				//	}
-				//}
+				if (ContextSingleton::GetInstance().state == AppState::CONNECTED && CreateNewRoom(hWnd, false)) {
+					SetWaitingRW(hWnd, true);
+					ContextSingleton::GetInstance().state = AppState::JOINING;
+				}				
+				break;
+			}
+			case IDC_RW_NEWPRIVATEROOM_BTN: {
+				if (ContextSingleton::GetInstance().state == AppState::CONNECTED && CreateNewRoom(hWnd, true)) {
+					SetWaitingRW(hWnd, true);
+					ContextSingleton::GetInstance().state = AppState::JOINING;
+				}
+				break;
+			}
+			case IDC_RW_JOINPRIVATEROOM_BTN: {
+				if (ContextSingleton::GetInstance().state == AppState::CONNECTED && JoinRoom(hWnd, true)) {
+					SetWaitingRW(hWnd, true);
+					ContextSingleton::GetInstance().state = AppState::JOINING;
+				}
+				break;
+			}
+			case IDC_RW_JOINPUBLICROOM_BTN: {
+				if (ContextSingleton::GetInstance().state == AppState::CONNECTED && JoinRoom(hWnd, true)) {
+					SetWaitingRW(hWnd, true);
+					ContextSingleton::GetInstance().state = AppState::JOINING;
+				}
+				break;
+			}
 			}
 			break;
-			}
-			break;
+		}
+
 		case WM_CREATE:
 		{
 			CreateRoomWindowLayout(hWnd);
-		}
-		break;
+			break;
+		}		
 
 		case WM_DESTROY:
 		{
 			auto state = ContextSingleton::GetInstance().state;
-			if (state == AppState::CONNECTED) {
+			if (state == AppState::CONNECTED || state == AppState::JOINING) {
 				PostQuitMessage(0);
+				shutdown(ContextSingleton::GetInstance().Socket, SD_BOTH);
+				closesocket(ContextSingleton::GetInstance().Socket);
+				WSACleanup();
 				return 0;
 			}
+			break;
 		}
-		break;
 
 		case WM_SOCKET:
 		{
@@ -222,44 +237,13 @@ namespace PlusPlusChat {
 				{
 					Communicator::ProcessMessage(incoming, (SOCKET)wParam);
 				}
-
-
-				/*UnregisterClass(L"Connection Window", GetModuleHandle(NULL));
-
-				DestroyWindow(ContextSingleton::GetInstance().connectionWindow);
-				ContextSingleton::GetInstance().connectionWindow = NULL;
-				ShowWindow(ContextSingleton::GetInstance().chatWindow, SW_SHOWDEFAULT);*/
-
-				/*for (int n = 0; n <= nMaxClients; n++)
-				{
-				wchar_t szIncoming[1024];
-				ZeroMemory(szIncoming, sizeof(szIncoming));
-
-				int inDataLength = recv(Socket[n],
-				(char*)szIncoming,
-				sizeof(szIncoming) / sizeof(szIncoming[0]),
-				0);
-
-				if (inDataLength != -1)
-				{
-				wcsncat(szHistory, szIncoming, inDataLength);
-				wcscat(szHistory, L"\r\n");
-
-				SendMessage(hEditIn,
-				WM_SETTEXT,
-				sizeof(szIncoming) - 1,
-				reinterpret_cast<LPARAM>(&szHistory));
-				}
-				}*/
 			}
 			break;
 
 			case FD_CLOSE:
 			{
-				/*MessageBox(hWnd,
-				L"Client closed connection",
-				L"Connection closed!",
-				MB_ICONINFORMATION | MB_OK);*/
+				MessageBox(hWnd, L"Server closed connection!", L"Connection closed!", MB_ICONINFORMATION | MB_OK);
+				DestroyWindow(hWnd);
 			}
 			break;
 
@@ -272,6 +256,7 @@ namespace PlusPlusChat {
 
 
 			}
+			break;
 		}
 		}
 
@@ -283,7 +268,7 @@ namespace PlusPlusChat {
 			L"Room Window",
 			L"PlusPlusChat",
 			WS_OVERLAPPEDWINDOW,
-			200, 200, 355, 435,
+			200, 200, 355, 460,
 			NULL,
 			NULL,
 			hInstance,
@@ -314,5 +299,176 @@ namespace PlusPlusChat {
 		UnregisterClass(L"Room Window", GetModuleHandle(NULL));
 		DestroyWindow(ContextSingleton::GetInstance().roomWindow);
 		ContextSingleton::GetInstance().roomWindow = NULL;
+	}
+
+	void SetWaitingRW(HWND hWnd, bool waiting) {
+		if (waiting) {
+			// disable interactive components
+			EnableWindow(GetDlgItem(hWnd, IDC_RW_USERNAME_TB), false);
+			EnableWindow(GetDlgItem(hWnd, IDC_RW_JOINPUBLICROOM_BTN), false);
+			EnableWindow(GetDlgItem(hWnd, IDC_RW_JOINPRIVATEROOM_BTN), false);
+			EnableWindow(GetDlgItem(hWnd, IDC_RW_PRIVATEROOM_TB), false);
+			EnableWindow(GetDlgItem(hWnd, IDC_RW_NEWROOM_TB), false);
+			EnableWindow(GetDlgItem(hWnd, IDC_RW_NEWPRIVATEROOM_BTN), false);
+			EnableWindow(GetDlgItem(hWnd, IDC_RW_NEWPUBLICROOM_BTN), false);
+			EnableWindow(GetDlgItem(hWnd, IDC_RW_PUBLICROOM_LIST), false);
+			// set waiting cursor
+			SetCursor(ContextSingleton::GetInstance().waitCursor);
+			// show progress
+			auto progress = GetDlgItem(hWnd, IDC_RW_PROGRESS);
+			ShowWindow(progress, SW_SHOW);
+			SendMessage(progress, PBM_SETMARQUEE, 1, (LPARAM)NULL);
+		}
+		else {
+			// enable interactive components
+			EnableWindow(GetDlgItem(hWnd, IDC_RW_USERNAME_TB), true);
+			EnableWindow(GetDlgItem(hWnd, IDC_RW_JOINPUBLICROOM_BTN), true);
+			EnableWindow(GetDlgItem(hWnd, IDC_RW_JOINPRIVATEROOM_BTN), true);
+			EnableWindow(GetDlgItem(hWnd, IDC_RW_PRIVATEROOM_TB), true);
+			EnableWindow(GetDlgItem(hWnd, IDC_RW_NEWROOM_TB), true);
+			EnableWindow(GetDlgItem(hWnd, IDC_RW_NEWPRIVATEROOM_BTN), true);
+			EnableWindow(GetDlgItem(hWnd, IDC_RW_NEWPUBLICROOM_BTN), true);
+			EnableWindow(GetDlgItem(hWnd, IDC_RW_PUBLICROOM_LIST), true);
+			// set default cursor
+			SetCursor(ContextSingleton::GetInstance().defaultCursor);
+			// hide progress
+			auto progress = GetDlgItem(hWnd, IDC_RW_PROGRESS);
+			ShowWindow(progress, SW_HIDE);
+			SendMessage(progress, PBM_SETMARQUEE, 0, (LPARAM)NULL);
+		}
+	}
+
+	bool JoinRoom(HWND hWnd, bool privateRoom) {
+		// extract username
+		wchar_t usernameBuff[31];
+		HWND hUsername = GetDlgItem(hWnd, IDC_RW_USERNAME_TB);
+		SendMessage(hUsername, WM_GETTEXT, sizeof(usernameBuff), reinterpret_cast<LPARAM>(usernameBuff));
+		auto usernameLength = wcslen(usernameBuff);
+		if (usernameLength == 0) {
+			MessageBox(hWnd, L"Username is empty. Please, enter username.", L"Error", MB_OK | MB_ICONERROR);
+			return false;
+		}
+
+		wchar_t roomNameBuff[31];
+		size_t roomNameLength;
+		if (privateRoom) {
+			//extract room name
+			HWND hRoomName = GetDlgItem(hWnd, IDC_RW_PRIVATEROOM_TB);
+			SendMessage(hRoomName, WM_GETTEXT, sizeof(roomNameBuff), reinterpret_cast<LPARAM>(roomNameBuff));
+			roomNameLength = wcslen(roomNameBuff);
+			if (roomNameLength == 0) {
+				MessageBox(hWnd, L"Chat room name is empty. Please, enter a name.", L"Error", MB_OK | MB_ICONERROR);
+				return false;
+			}
+		}
+		else {
+			// extract selected item from listbox
+		}
+
+		// Construct payload
+		wchar_t payload[64];
+
+		// set room visibility - S:secret / V:visible
+		if (privateRoom)
+		{
+			payload[0] = L'S';
+		}
+		else {
+			payload[0] = L'V';
+		}
+		payload[1] = L' ';
+		for (size_t i = 0; i < roomNameLength; i++)
+		{
+			if (roomNameBuff[i] == L' ') {
+				MessageBox(hWnd, L"Chat room name cannot contain whitespace.", L"Error", MB_OK | MB_ICONERROR);
+				return false;
+			}
+			payload[i + 2] = roomNameBuff[i];
+		}
+		payload[roomNameLength + 2] = L' ';
+		for (size_t i = 0; i < usernameLength; i++)
+		{
+			if (usernameBuff[i] == L' ') {
+				MessageBox(hWnd, L"Username cannot contain whitespace.", L"Error", MB_OK | MB_ICONERROR);
+				return false;
+			}
+			payload[i + roomNameLength + 3] = usernameBuff[i];
+		}
+		payload[3 + roomNameLength + usernameLength] = 0;
+		Communicator::SendMsg(Action::JOIN, payload, ContextSingleton::GetInstance().Socket);
+	}
+
+	bool CreateNewRoom(HWND hWnd, bool privateRoom) {
+		// extract username
+		wchar_t usernameBuff[31];
+		HWND hUsername = GetDlgItem(hWnd, IDC_RW_USERNAME_TB);
+		SendMessage(hUsername, WM_GETTEXT, sizeof(usernameBuff), reinterpret_cast<LPARAM>(usernameBuff));
+		auto usernameLength = wcslen(usernameBuff);
+		if (usernameLength == 0) {
+			MessageBox(hWnd, L"Username is empty. Please, enter username.", L"Error", MB_OK | MB_ICONERROR);
+			return false;
+		}
+
+		//extract room name
+		wchar_t roomNameBuff[31];
+		HWND hRoomName = GetDlgItem(hWnd, IDC_RW_NEWROOM_TB);
+		SendMessage(hRoomName, WM_GETTEXT, sizeof(roomNameBuff), reinterpret_cast<LPARAM>(roomNameBuff));
+		auto roomNameLength = wcslen(roomNameBuff);
+		if (roomNameLength == 0) {
+			MessageBox(hWnd, L"Chat room name is empty. Please, enter a name.", L"Error", MB_OK | MB_ICONERROR);
+			return false;
+		}
+
+		// Construct payload
+		wchar_t payload[64];
+
+		// set room visibility - S:secret / V:visible
+		if (privateRoom)
+		{
+			payload[0] = L'S';
+		}
+		else {
+			payload[0] = L'V';
+		}
+		payload[1] = L' ';
+		for (size_t i = 0; i < roomNameLength; i++)
+		{
+			if (roomNameBuff[i] == L' ') {
+				MessageBox(hWnd, L"Chat room name cannot contain whitespace.", L"Error", MB_OK | MB_ICONERROR);
+				return false;
+			}
+			payload[i + 2] = roomNameBuff[i];
+		}
+		payload[roomNameLength + 2] = L' ';
+		for (size_t i = 0; i < usernameLength; i++)
+		{
+			if (usernameBuff[i] == L' ') {
+				MessageBox(hWnd, L"Username cannot contain whitespace.", L"Error", MB_OK | MB_ICONERROR);
+				return false;
+			}
+			payload[i + roomNameLength + 3] = usernameBuff[i];
+		}
+		payload[3 + roomNameLength + usernameLength] = 0;
+		Communicator::SendMsg(Action::CREATE, payload, ContextSingleton::GetInstance().Socket);
+	}
+
+	void ReloadPublicRoomsList() {
+		auto hWnd = ContextSingleton::GetInstance().roomWindow;
+		if (hWnd != NULL)
+		{
+			LVITEM itm;
+			itm.mask = LVFIF_TEXT;
+			itm.iSubItem = 0;
+			itm.state = 0;
+			itm.stateMask = 0;
+
+			auto && vct = ContextSingleton::GetInstance().roomsList;
+			for (size_t i = 0; i < vct.size(); i++)
+			{
+				itm.iItem = i;
+				itm.pszText = (LPWSTR)vct[i].c_str();
+				SendMessage(GetDlgItem(hWnd, IDC_RW_PUBLICROOM_LIST), LVM_INSERTITEM, 0, (LPARAM)&itm);
+			}
+		}
 	}
 }

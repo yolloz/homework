@@ -2,6 +2,7 @@
 #define PLUSPLUSCHAT_CONTEXTSINGLETON_
 
 #include <winsock2.h>
+#include <vector>
 #include "Enumerations.h"
 #include "resource.h"
 
@@ -25,6 +26,9 @@ namespace PlusPlusChat {
 		SOCKET Socket = NULL;
 		HICON icon = LoadIcon(GetModuleHandle(NULL), MAKEINTRESOURCE(IDI_ICON1));
 		HICON iconSmall = LoadIcon(GetModuleHandle(NULL), MAKEINTRESOURCE(IDI_ICON2));
+		HCURSOR waitCursor = LoadCursor(GetModuleHandle(NULL), IDC_WAIT);
+		HCURSOR defaultCursor = LoadCursor(GetModuleHandle(NULL), IDC_ARROW);
+		std::vector<std::wstring> roomsList;
 
 
 		static ContextSingleton& GetInstance();

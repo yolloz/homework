@@ -6,6 +6,7 @@
 #define PLUSPLUSCHAT_ROOMWINDOW_
 
 #include <windows.h>
+#include <commctrl.h>
 #include "ContextSingleton.h"
 #include "ChatWindow.h"
 #include <vector>
@@ -24,6 +25,7 @@
 #define IDC_RW_NEWROOM_TB			406
 #define IDC_RW_NEWPRIVATEROOM_BTN	407
 #define IDC_RW_NEWPUBLICROOM_BTN	408
+#define IDC_RW_PROGRESS				409
 
 
 namespace PlusPlusChat {
@@ -33,6 +35,10 @@ namespace PlusPlusChat {
 	void CreateRoomWindowLayout(HWND hWnd);
 	bool ActivateRoomWindow();
 	void DeactivateRoomWindow();
+	void SetWaitingRW(HWND hWnd, bool waiting);
+	bool CreateNewRoom(HWND hWnd, bool privateRoom);
+	bool JoinRoom(HWND hWnd, bool privateRoom);
+	void ReloadPublicRoomsList();
 }
 
 #endif
