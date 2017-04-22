@@ -107,11 +107,9 @@ namespace PlusPlusChat {
 				int test = sizeof(szBuffer);
 				ZeroMemory(szBuffer, sizeof(szBuffer));
 
-				SendMessage(hEditOut,
-					WM_GETTEXT,
-					sizeof(szBuffer),
-					reinterpret_cast<LPARAM>(szBuffer));
-				send(ContextSingleton::GetInstance().Socket, (char *)szBuffer, wcslen(szBuffer) * 2, 0);
+				SendMessage(hEditOut, WM_GETTEXT, sizeof(szBuffer), reinterpret_cast<LPARAM>(szBuffer));
+				//send(ContextSingleton::GetInstance().Socket, (char *)szBuffer, wcslen(szBuffer) * 2, 0);
+				Communicator::SendMsg(Action::SEND, szBuffer, ContextSingleton::GetInstance().Socket);
 				SendMessage(hEditOut, WM_SETTEXT, NULL, (LPARAM)L"");
 			}
 			break;
@@ -143,7 +141,17 @@ namespace PlusPlusChat {
 			{
 			case FD_READ:
 			{
-				wchar_t szIncoming[1024];
+				wchar_t incoming[1024];
+				ZeroMemory(incoming, sizeof(incoming));
+
+				int inDataLength = recv((SOCKET)wParam, (char*)incoming, sizeof(incoming) / sizeof((char)incoming[0]), 0);
+
+				if (inDataLength != -1)
+				{
+					Communicator::ProcessMessage(incoming, (SOCKET)wParam);
+				}
+
+				/*wchar_t szIncoming[1024];
 				ZeroMemory(szIncoming, sizeof(szIncoming));
 
 				int inDataLength = recv(ContextSingleton::GetInstance().Socket,
@@ -157,7 +165,7 @@ namespace PlusPlusChat {
 				SendMessage(hEditIn,
 					WM_SETTEXT,
 					sizeof(szIncoming) - 1,
-					reinterpret_cast<LPARAM>(&szHistory));
+					reinterpret_cast<LPARAM>(&szHistory));*/
 			}
 			break;
 
@@ -233,5 +241,40 @@ namespace PlusPlusChat {
 		ShowWindow(ContextSingleton::GetInstance().chatWindow, SW_SHOWDEFAULT);
 		WSAAsyncSelect(ContextSingleton::GetInstance().Socket, ContextSingleton::GetInstance().chatWindow, WM_SOCKET, (FD_READ | FD_CLOSE));
 		return true;
+	}
+
+	std::wstring GetTime() {
+		wchar_t buffer[14];
+		time_t t = time(0);   // get time now
+		struct tm * now = localtime(&t);
+		int day = now->tm_mday;
+		int month = now->tm_mon + 1;
+		int hour = now->tm_hour;
+		int minute = now->tm_min;
+		buffer[0] = L'0' + (day / 10);
+		buffer[1] = L'0' + (day % 10);
+		buffer[2] = L'.';
+		buffer[3] = L'0' + (month / 10);
+		buffer[4] = L'0' + (month % 10);
+		buffer[5] = L'.';
+		buffer[6] = L' ';
+		buffer[7] = L'0' + (hour / 10);
+		buffer[8] = L'0' + (hour % 10);
+		buffer[9] = L':';
+		buffer[10] = L'0' + (minute / 10);
+		buffer[11] = L'0' + (minute % 10);
+		buffer[12] = L' ';
+		buffer[13] = 0;
+		return std::wstring(buffer);
+	}
+
+	void ReceiveMessage(std::wstring & sender, std::wstring & message) {
+		std::wstring info = GetTime() + sender;
+		wcsncat_s(szHistory, info.c_str(), info.length());
+		wcscat_s(szHistory, L"\r\n");
+		wcsncat_s(szHistory, message.c_str(), message.length());
+		wcscat_s(szHistory, L"\r\n");
+
+		SendMessage(hEditIn, WM_SETTEXT, 0, reinterpret_cast<LPARAM>(&szHistory));
 	}
 }

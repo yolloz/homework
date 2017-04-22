@@ -18,7 +18,7 @@ namespace PlusPlusChat {
 					DeactivateConnectionWindow();
 					ActivateRoomWindow();
 
-					Communicator::SendMsg(Action::ACK, L"", s);	
+					//Communicator::SendMsg(Action::ACK, L"", s);	
 					// ask server to fill list box
 					Communicator::SendMsg(Action::GETROOMS, L"", s);
 					break;
@@ -33,6 +33,24 @@ namespace PlusPlusChat {
 							vct.push_back(tokens[i]);
 						}
 						ReloadPublicRoomsList();
+					}
+					break;
+				}
+
+				case Action::JOINED: {
+					if (ContextSingleton::GetInstance().state == AppState::JOINING) {
+						ContextSingleton::GetInstance().state = AppState::CHATTING;
+						DeactivateRoomWindow();
+						ActivateChatWindow();						
+					}
+					break;
+				}
+
+				case Action::RECV: {
+					if (ContextSingleton::GetInstance().state == AppState::CHATTING) {
+						// cut out message
+						std::wstring text(ws, tokens[0].length() + tokens[1].length() + tokens[2].length() + 3);
+						ReceiveMessage(tokens[2], text);
 					}
 					break;
 				}
@@ -65,10 +83,10 @@ namespace PlusPlusChat {
 			break;
 		}
 
-		case Action::ACK: {
+		/*case Action::ACK: {
 			p = BuildMessage(L"ACK");
 			break;
-		}
+		}*/
 
 		case Action::CREATE: {
 			p = BuildMessage(L"CREATE", payload);
@@ -82,6 +100,11 @@ namespace PlusPlusChat {
 
 		case Action::GETROOMS: {
 			p = BuildMessage(L"GETROOMS");
+			break;
+		}
+
+		case Action::SEND: {
+			p = BuildMessage(L"SEND", payload);
 			break;
 		}
 
@@ -113,9 +136,12 @@ namespace PlusPlusChat {
 	void Communicator::InitLookup() {
 		_actionLookup[L"TINI"] = Action::TINI;
 		_actionLookup[L"INIT"] = Action::INIT;
-		_actionLookup[L"ACK"] = Action::ACK;
+		//_actionLookup[L"ACK"] = Action::ACK;
 		_actionLookup[L"ERR"] = Action::ERR;
 		_actionLookup[L"ROOMS"] = Action::ROOMS;
 		_actionLookup[L"INVALID_ACTION"] = Action::INVALID_ACTION;
+		_actionLookup[L"JOINED"] = Action::JOINED;
+		_actionLookup[L"SEND"] = Action::SEND;
+		_actionLookup[L"RECV"] = Action::RECV;
 	}
 }

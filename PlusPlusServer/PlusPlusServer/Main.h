@@ -10,14 +10,16 @@
 #include <sstream>
 #include <iterator>
 #include <map>
-#include "Context.h"
+#include "Server.h"
 #include "resource.h"
 
 #pragma comment(lib,"ws2_32.lib")
 
 #define IDC_PORTNUMBER 110
+#define IDC_SEND_BUTTON 153
 
-
+const std::wstring UNIQ = L"#PPChat";
+const wchar_t SPACE = L' ';
 
 template<typename Out>
 void split(const std::wstring &s, wchar_t delim, Out result) {
@@ -43,5 +45,6 @@ void SendMsg(Action action, const std::wstring & payload, SOCKET s);
 bool ProcessMessage(wchar_t * message, SOCKET s);
 std::wstring BuildMessage(const std::wstring & action, const std::wstring & payload);
 std::wstring BuildMessage(const std::wstring & action);
+void HandleError(ErrorCode code, SOCKET s);
 
 #endif

@@ -10,6 +10,8 @@
 #define PLUSPLUSCHAT_CHATWINDOW_
 
 #include <windows.h>
+#include <ctime>
+#include "Communicator.h"
 #include "ContextSingleton.h"
 #include "Enumerations.h"
 
@@ -24,5 +26,7 @@ namespace PlusPlusChat {
 	ATOM WINAPI RegisterChatWindow(HINSTANCE hInstance);
 	LRESULT CALLBACK ChatWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	bool ActivateChatWindow();
+	void ReceiveMessage(std::wstring & sender, std::wstring & message);
+	std::wstring GetTime();
 }
 #endif

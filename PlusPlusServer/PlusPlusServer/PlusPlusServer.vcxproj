@@ -146,11 +146,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Context.cpp" />
+    <ClCompile Include="Server.cpp" />
     <ClCompile Include="Main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Context.h" />
+    <ClInclude Include="Server.h" />
     <ClInclude Include="Enums.h" />
     <ClInclude Include="Main.h" />
     <ClInclude Include="resource.h" />

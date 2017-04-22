@@ -101,7 +101,7 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		{
 		case IDC_MAIN_BUTTON:
 		{		
-			if (Context::GetContext().State() == AppState::STOPPED) {
+			if (Server::GeInstance().State() == AppState::STOPPED) {
 				// Get port number
 				wchar_t portBuffer[6];
 				HWND hPortNumber = GetDlgItem(hWnd, IDC_PORTNUMBER);
@@ -122,16 +122,16 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				SendMessage(hStartBtn, WM_SETTEXT, NULL, (LPARAM)L"Stop");
 				EnableWindow(hPortNumber, false);
 				StartListening(windowHandle, port);
-				Context::GetContext().State() = AppState::LISTENING;
+				Server::GeInstance().State() = AppState::LISTENING;
 			}
 			else {
-				shutdown(Context::GetContext().ServerSocket, SD_BOTH);
-				closesocket(Context::GetContext().ServerSocket);
+				shutdown(Server::GeInstance().ServerSocket, SD_BOTH);
+				closesocket(Server::GeInstance().ServerSocket);
 				WSACleanup();
 				HWND hPortNumber = GetDlgItem(hWnd, IDC_PORTNUMBER);
 				SendMessage(hStartBtn, WM_SETTEXT, NULL, (LPARAM)L"Start");
 				EnableWindow(hPortNumber, true);
-				Context::GetContext().State() = AppState::STOPPED;
+				Server::GeInstance().State() = AppState::STOPPED;
 			}
 			
 
@@ -150,6 +150,21 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			SendMessage(hEditOut, WM_SETTEXT, NULL, (LPARAM)"");*/
 		}
 		break;
+
+		case IDC_SEND_BUTTON:
+		{
+			/*wchar_t szBuffer[1024];
+			ZeroMemory(szBuffer, sizeof(szBuffer));
+
+			SendMessage(hEditOut, WM_GETTEXT, sizeof(szBuffer), reinterpret_cast<LPARAM>(szBuffer));
+			for (auto n = Server::GeInstance().cl; n <= nClient; n++)
+			{
+			send(Socket[n], (char*)szBuffer, wcslen(szBuffer) * 2, 0);
+			}
+
+			SendMessage(hEditOut, WM_SETTEXT, NULL, (LPARAM)"");*/
+		}
+		break;
 		}
 		break;
 	case WM_CREATE:
@@ -161,8 +176,8 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_DESTROY:
 	{
 		PostQuitMessage(0);
-		shutdown(Context::GetContext().ServerSocket, SD_BOTH);
-		closesocket(Context::GetContext().ServerSocket);
+		shutdown(Server::GeInstance().ServerSocket, SD_BOTH);
+		closesocket(Server::GeInstance().ServerSocket);
 		WSACleanup();
 		return 0;
 	}
@@ -194,7 +209,7 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		case FD_CLOSE:
 		{
 			MessageBox(hWnd, L"Client closed connection", L"Connection closed!", MB_ICONINFORMATION | MB_OK);
-			Context::GetContext().RemoveClient((SOCKET)wParam);
+			Server::GeInstance().RemoveClient((SOCKET)wParam);
 			break;
 		}
 
@@ -204,9 +219,9 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			auto socket = accept(wParam, &sockAddrClient, &size);
 			if (socket != INVALID_SOCKET)
 			{
-				if (Context::GetContext().CanAddClient())
+				if (Server::GeInstance().CanAddClient())
 				{
-					Context::GetContext().AddClient(socket);
+					Server::GeInstance().AddClient(socket);
 					SendMessage(hEditIn, WM_SETTEXT, NULL, (LPARAM)L"Client connected!");
 				}
 				else {
@@ -356,6 +371,20 @@ void CreateLayout(HWND hWnd) {
 		WM_SETFONT,
 		(WPARAM)hfDefault,
 		MAKELPARAM(FALSE, 0));
+
+	HWND hStartBtn = CreateWindow(
+		L"BUTTON", L"Send",
+		WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
+		205, 360, 75, 23,
+		hWnd,
+		(HMENU)IDC_SEND_BUTTON,
+		GetModuleHandle(NULL),
+		NULL);
+
+	SendMessage(hStartBtn,
+		WM_SETFONT,
+		(WPARAM)hfDefault,
+		MAKELPARAM(FALSE, 0));
 }
 
 void StartListening(HWND hWnd, std::int_fast32_t port) {
@@ -367,8 +396,8 @@ void StartListening(HWND hWnd, std::int_fast32_t port) {
 		SendMessage(hWnd, WM_DESTROY, NULL, NULL);
 		return;
 	}
-	Context::GetContext().ServerSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (Context::GetContext().ServerSocket == INVALID_SOCKET)
+	Server::GeInstance().ServerSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (Server::GeInstance().ServerSocket == INVALID_SOCKET)
 	{
 		MessageBox(hWnd, L"Socket creation failed", L"Critical Error", MB_ICONERROR);
 		SendMessage(hWnd, WM_DESTROY, NULL, NULL);
@@ -380,14 +409,14 @@ void StartListening(HWND hWnd, std::int_fast32_t port) {
 	SockAddr.sin_family = AF_INET;
 	SockAddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-	if (bind(Context::GetContext().ServerSocket, (LPSOCKADDR)&SockAddr, sizeof(SockAddr)) == SOCKET_ERROR)
+	if (bind(Server::GeInstance().ServerSocket, (LPSOCKADDR)&SockAddr, sizeof(SockAddr)) == SOCKET_ERROR)
 	{
 		MessageBox(hWnd, L"Unable to bind socket", L"Error", MB_OK);
 		SendMessage(hWnd, WM_DESTROY, NULL, NULL);
 		return;
 	}
 
-	nResult = WSAAsyncSelect(Context::GetContext().ServerSocket,
+	nResult = WSAAsyncSelect(Server::GeInstance().ServerSocket,
 		hWnd,
 		WM_SOCKET,
 		(FD_CLOSE | FD_ACCEPT | FD_READ));
@@ -401,7 +430,7 @@ void StartListening(HWND hWnd, std::int_fast32_t port) {
 		return;
 	}
 
-	if (listen(Context::GetContext().ServerSocket, SOMAXCONN) == SOCKET_ERROR)
+	if (listen(Server::GeInstance().ServerSocket, SOMAXCONN) == SOCKET_ERROR)
 	{
 		MessageBox(hWnd,
 			L"Unable to listen!",
@@ -414,24 +443,78 @@ void StartListening(HWND hWnd, std::int_fast32_t port) {
 
 bool ProcessMessage(wchar_t * message, SOCKET s) {
 	std::wstring ws(message);
+	// split message to tokens
 	std::vector<std::wstring> tokens = split(ws, L' ');
 	if (tokens.size() >= 2) {
-		if (tokens[0] == L"#PPChat") {
-			auto action = Context::ResolveAction(tokens[1]);
+		// check if it starts with unique code
+		if (tokens[0] == UNIQ) {
+			auto action = Server::ResolveAction(tokens[1]);
 			switch (action) {
+
 			case Action::INIT: {
-				Context::GetContext().ClientConnected(s);
+				Server::GeInstance().ClientConnected(s);
 				SendMsg(Action::TINI, L"", s);
 				break;
 			}
 
-			case Action::ACK: {
-				// no need for an action
+			//case Action::ACK: {
+			//	// no need for an action
+			//	break;
+			//}
+
+			case Action::GETROOMS: {
+				SendMsg(Action::ROOMS, Server::GeInstance().GetPublicRooms(), s);
 				break;
 			}
 
-			case Action::GETROOMS: {
-				SendMsg(Action::ROOMS, Context::GetContext().GetPublicRooms(), s);
+			case Action::CREATE: {
+				if (tokens.size() == 5) {
+					auto rtc = Server::GeInstance().AddChatRoom(tokens[3], tokens[2], tokens[4], s);
+					if (rtc == ErrorCode::OK) {
+						// everything was fine, notify client about succesful join
+						SendMsg(Action::JOINED, tokens[3] + SPACE + tokens[4], s);
+					}
+					else {
+						HandleError(rtc, s);
+					}
+				}
+				else {
+					HandleError(ErrorCode::INVALID_REQUEST, s);
+				}
+				break;
+			}
+
+			case Action::JOIN: {
+				if (tokens.size() == 5) {
+					auto rtc = Server::GeInstance().JoinChatRoom(s, tokens[4], tokens[3], tokens[2]);
+					if (rtc == ErrorCode::OK) {
+						// everything was fine, notify client about succesful join
+						SendMsg(Action::JOINED, tokens[3] + SPACE + tokens[4], s);
+					}
+					else{
+						HandleError(rtc, s);
+					}
+				}
+				else {
+					HandleError(ErrorCode::INVALID_REQUEST, s);
+				}
+				break;
+			}
+
+			case Action::SEND: {
+				if (tokens.size() > 2) {
+					auto rtc = Server::GeInstance().JoinChatRoom(s, tokens[4], tokens[3], tokens[2]);
+					if (rtc == ErrorCode::OK) {
+						// everything was fine, notify client about succesful join
+						SendMsg(Action::JOINED, tokens[3] + SPACE + tokens[4], s);
+					}
+					else {
+						HandleError(rtc, s);
+					}
+				}
+				else {
+					HandleError(ErrorCode::INVALID_REQUEST, s);
+				}
 				break;
 			}
 					   
@@ -442,11 +525,42 @@ bool ProcessMessage(wchar_t * message, SOCKET s) {
 }
 
 std::wstring BuildMessage(const std::wstring & action, const std::wstring & payload) {
-	return L"#PPChat " + action + L" " + payload;
+	return UNIQ + SPACE + action + SPACE + payload;
 }
 
 std::wstring BuildMessage(const std::wstring & action) {
-	return L"#PPChat " + action;
+	return UNIQ + SPACE + action;
+}
+
+void HandleError(ErrorCode code, SOCKET s) {
+	std::wstring payload;
+	switch (code)
+	{
+	case OK:
+		break;
+	case INVALID_REQUEST: {
+		payload = L"Invalid request";
+		break;
+	}
+	case UNAUTHORIZED_REQUEST:
+		payload = L"Unauthorized request";
+		break;
+	case ROOM_NAME_TAKEN:
+		payload = L"Room name was already taken";
+		break;
+	case USERNAME_TAKEN:
+		payload = L"Username was already taken";
+		break;
+	case NO_SUCH_ROOM:
+		payload = L"No such room was found";
+		break;
+	default:
+		payload = L"Ooops. Something failed :(";
+		break;
+	}
+	if (code != ErrorCode::OK) {
+		SendMsg(Action::ERR, payload, s);
+	}
 }
 
 void SendMsg(Action action, const std::wstring & payload, SOCKET s) {	
@@ -465,6 +579,11 @@ void SendMsg(Action action, const std::wstring & payload, SOCKET s) {
 
 	case Action::ROOMS: {
 		p = BuildMessage(L"ROOMS", payload);
+		break;
+	}
+
+	case Action::JOINED: {
+		p = BuildMessage(L"JOINED", payload);
 		break;
 	}
 

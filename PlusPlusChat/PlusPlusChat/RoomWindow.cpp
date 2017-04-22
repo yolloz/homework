@@ -53,7 +53,7 @@ namespace PlusPlusChat {
 		HWND hPublicRoomList = CreateWindowEx(
 			WS_EX_CLIENTEDGE,
 			L"LISTBOX", L"",
-			WS_CHILD | WS_VISIBLE | WS_GROUP | WS_VSCROLL,
+			WS_CHILD | WS_VISIBLE | WS_GROUP | WS_VSCROLL | LBS_SORT,
 			30, 93, 280, 100,
 			hWnd, (HMENU)IDC_RW_PUBLICROOM_LIST, GetModuleHandle(NULL), NULL);
 
@@ -145,6 +145,8 @@ namespace PlusPlusChat {
 
 		SendMessage(hPublicRoomGrp, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
+		SendMessage(hPublicRoomList, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));		
+
 		SendMessage(hJoinPublicRoomBtn, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
 		SendMessage(hPrivateRoomGrp, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
@@ -193,7 +195,7 @@ namespace PlusPlusChat {
 				break;
 			}
 			case IDC_RW_JOINPUBLICROOM_BTN: {
-				if (ContextSingleton::GetInstance().state == AppState::CONNECTED && JoinRoom(hWnd, true)) {
+				if (ContextSingleton::GetInstance().state == AppState::CONNECTED && JoinRoom(hWnd, false)) {
 					SetWaitingRW(hWnd, true);
 					ContextSingleton::GetInstance().state = AppState::JOINING;
 				}
@@ -363,6 +365,15 @@ namespace PlusPlusChat {
 		}
 		else {
 			// extract selected item from listbox
+			HWND listBox = GetDlgItem(hWnd, IDC_RW_PUBLICROOM_LIST);
+
+			// Get selected index.
+			int lbItem = (int)SendMessage(listBox, LB_GETCURSEL, 0, 0);
+
+			// Get item data.
+			size_t i = (size_t)SendMessage(listBox, LB_GETITEMDATA, lbItem, 0);
+			wcscpy_s(roomNameBuff, ContextSingleton::GetInstance().roomsList[i].c_str());
+			roomNameLength = wcslen(roomNameBuff);
 		}
 
 		// Construct payload
@@ -456,18 +467,14 @@ namespace PlusPlusChat {
 		auto hWnd = ContextSingleton::GetInstance().roomWindow;
 		if (hWnd != NULL)
 		{
-			LVITEM itm;
-			itm.mask = LVFIF_TEXT;
-			itm.iSubItem = 0;
-			itm.state = 0;
-			itm.stateMask = 0;
-
 			auto && vct = ContextSingleton::GetInstance().roomsList;
+			auto listBox = GetDlgItem(hWnd, IDC_RW_PUBLICROOM_LIST);
 			for (size_t i = 0; i < vct.size(); i++)
 			{
-				itm.iItem = i;
-				itm.pszText = (LPWSTR)vct[i].c_str();
-				SendMessage(GetDlgItem(hWnd, IDC_RW_PUBLICROOM_LIST), LVM_INSERTITEM, 0, (LPARAM)&itm);
+				// insert item
+				int pos = (int)SendMessage(listBox, LB_ADDSTRING, 0,(LPARAM)vct[i].c_str());
+				// set item index to match array index
+				SendMessage(listBox, LB_SETITEMDATA, pos, (LPARAM)i);
 			}
 		}
 	}
