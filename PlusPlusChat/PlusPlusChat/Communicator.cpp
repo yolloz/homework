@@ -41,7 +41,7 @@ namespace PlusPlusChat {
 					if (ContextSingleton::GetInstance().state == AppState::JOINING) {
 						ContextSingleton::GetInstance().state = AppState::CHATTING;
 						DeactivateRoomWindow();
-						ActivateChatWindow();						
+						ActivateChatWindow(tokens[2], tokens[3]);						
 					}
 					break;
 				}
@@ -53,6 +53,41 @@ namespace PlusPlusChat {
 						ReceiveMessage(tokens[2], text);
 					}
 					break;
+				}
+
+				case Action::PING: {
+					SendMsg(Action::PONG, L"", s);
+					break;
+				}
+
+				case Action::ERR: {
+					// get active window
+					HWND hWnd = NULL;
+					auto state = ContextSingleton::GetInstance().state;
+					switch (state)
+					{
+					case PlusPlusChat::DISCONNECTED:
+						hWnd = ContextSingleton::GetInstance().connectionWindow;
+						break;
+					case PlusPlusChat::CONNECTED:
+						hWnd = ContextSingleton::GetInstance().roomWindow;
+						break;
+					case PlusPlusChat::CHATTING:
+						hWnd = ContextSingleton::GetInstance().chatWindow;
+						break;
+					case PlusPlusChat::CONNECTING:
+						hWnd = ContextSingleton::GetInstance().connectionWindow;
+						break;
+					case PlusPlusChat::JOINING:
+						hWnd = ContextSingleton::GetInstance().roomWindow;
+						break;
+					}
+					std::wstring error(ws, tokens[0].length() + tokens[1].length() + 2);
+					if (state == AppState::JOINING) {
+						ContextSingleton::GetInstance().state = AppState::CONNECTED;
+						SetWaitingRW(hWnd, false);
+					}
+					MessageBox(hWnd, error.c_str(), L"Error", MB_ICONINFORMATION | MB_OK);
 				}
 
 				}
@@ -108,6 +143,10 @@ namespace PlusPlusChat {
 			break;
 		}
 
+		case Action::PONG:
+			p = BuildMessage(L"PONG");
+			break;
+
 		default: {
 			valid = false;
 			break;
@@ -143,5 +182,7 @@ namespace PlusPlusChat {
 		_actionLookup[L"JOINED"] = Action::JOINED;
 		_actionLookup[L"SEND"] = Action::SEND;
 		_actionLookup[L"RECV"] = Action::RECV;
+		_actionLookup[L"PING"] = Action::PING;
+		_actionLookup[L"PONG"] = Action::PONG;
 	}
 }

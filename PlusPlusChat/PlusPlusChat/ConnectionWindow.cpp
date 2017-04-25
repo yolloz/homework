@@ -1,6 +1,13 @@
 #include "ConnectionWindow.h"
 
+
+
 namespace PlusPlusChat {
+
+	// define here because it's needed nowhere else
+	bool autoConnect = false;
+	size_t nextAutoconnect = 0;
+	std::vector<configRecord> autoConnections;
 
 	ATOM WINAPI RegisterConnectionWindow(HINSTANCE hInstance) {
 		WNDCLASSEX wClass;
@@ -44,7 +51,7 @@ namespace PlusPlusChat {
 		// create IP text box
 		HWND hIpEdit = CreateWindowEx(
 			WS_EX_CLIENTEDGE,
-			L"EDIT", L"192.168.0.188",//L"",
+			L"EDIT", L"",
 			WS_CHILD | WS_VISIBLE | WS_TABSTOP,
 			55, 45, 100, 23,
 			hWnd, (HMENU)IDC_CW_IPEDIT, GetModuleHandle(NULL), NULL);
@@ -60,7 +67,7 @@ namespace PlusPlusChat {
 		// Create port message box
 		HWND hPortNumber = CreateWindowEx(
 			WS_EX_CLIENTEDGE,
-			L"EDIT", L"4444",//L"",
+			L"EDIT", L"",
 			WS_CHILD | WS_VISIBLE | ES_NUMBER | WS_TABSTOP,
 			245, 45, 60, 23,
 			hWnd, (HMENU)IDC_CW_PORTEDIT, GetModuleHandle(NULL), NULL);
@@ -68,7 +75,7 @@ namespace PlusPlusChat {
 		// Create a connect button
 		HWND hConnectBtn = CreateWindow(
 			L"BUTTON", L"Connect",
-			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
+			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
 			315, 45, 75, 23,
 			hWnd, (HMENU)IDC_CW_CONNECTBTN, GetModuleHandle(NULL), NULL);
 
@@ -83,9 +90,19 @@ namespace PlusPlusChat {
 		// Create auto connect button
 		HWND hAutoConnectBtn = CreateWindow(
 			L"BUTTON", L"Connect to server from CONFIG file",
-			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
+			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
 			80, 123, 260, 23,
 			hWnd, (HMENU)IDC_CW_AUTOCONNECTBTN, GetModuleHandle(NULL), NULL);
+
+		HWND hProgress = CreateWindowEx(
+			0,
+			PROGRESS_CLASS, L"My progress",
+			WS_VISIBLE | WS_CHILD | PBS_MARQUEE,
+			20, 176, 380, 18,
+			hWnd, (HMENU)IDC_CW_PROGRESS, GetModuleHandle(NULL), NULL);
+
+		// Hide progress bar
+		ShowWindow(hProgress, SW_HIDE);
 
 		if (!hIpEdit || !hIpLbl)
 		{
@@ -115,11 +132,11 @@ namespace PlusPlusChat {
 	LRESULT CALLBACK ConnectionWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 		switch (message)
 		{
-		case WM_COMMAND:
+		case WM_COMMAND: {
 			switch (LOWORD(wParam))
 			{
 			case IDC_CW_CONNECTBTN:
-			{				
+			{
 				if (ContextSingleton::GetInstance().state == AppState::DISCONNECTED) {
 					// Get port number
 					wchar_t portBuffer[6];
@@ -132,10 +149,10 @@ namespace PlusPlusChat {
 						port += portBuffer[i] - L'0';
 					}
 					if (port == 0) {
-						port = ContextSingleton::GetInstance().nPort;
+						port = ContextSingleton::defaultPort;
 					}
 					if (port > 65535 || port < 1024) {
-						MessageBox(ContextSingleton::GetInstance().connectionWindow, L"Port number is invalid. Valid numbers are 1024 - 65535", L"Invalid port number", MB_ICONERROR);
+						MessageBox(hWnd, L"Port number is invalid. Valid numbers are 1024 - 65535", L"Invalid port number", MB_ICONERROR);
 						break;
 					}
 
@@ -145,18 +162,48 @@ namespace PlusPlusChat {
 					SendMessage(hIpAddress, WM_GETTEXT, sizeof(ipBuffer), reinterpret_cast<LPARAM>(ipBuffer));
 
 					if (ConnectToServer(ContextSingleton::GetInstance().connectionWindow, port, ipBuffer)) {
-						//ContextSingleton::GetInstance().state = AppState::CONNECTING;
+						SetWaitingCW(hWnd, true);
 					}
 				}
+				break;
+			}
+
+			case IDC_CW_AUTOCONNECTBTN: {
+				if (ContextSingleton::GetInstance().state == AppState::DISCONNECTED)
+				{
+					std::ifstream ifs("CONFIG.txt", std::ifstream::in);
+					if (!ifs) {
+						MessageBox(hWnd, L"CONFIG.txt file was not found.", L"Autoconnect failed", MB_ICONERROR);
+					}
+					else {
+						autoConnections = ParseConfig(ifs);
+						std::wstring incorrectLines;
+						for (size_t i = 0; i < autoConnections.size(); i++)
+						{
+							if (!autoConnections[i].valid) {
+								incorrectLines += L" " + std::to_wstring(i + 1);
+							}
+						}
+						if (incorrectLines.length() > 0) {
+							MessageBox(ContextSingleton::GetInstance().connectionWindow, (L"Some lines in config are invalid.\r\nLine numbers:" + incorrectLines).c_str(), L"Invalid config entries", MB_ICONWARNING);
+						}
+						autoConnect = true;
+						SetWaitingCW(hWnd, true);
+						AutoConnect(hWnd);
+					}
+					
+				}
+				break;
+			}
 			}
 			break;
-			}
-			break;
+		}
+
 		case WM_CREATE:
 		{
 			CreateConnectionWindowLayout(hWnd);
-		}
-		break;
+			break;
+		}		
 
 		case WM_DESTROY:
 		{
@@ -200,8 +247,20 @@ namespace PlusPlusChat {
 
 			case FD_CONNECT:
 			{
-				ContextSingleton::GetInstance().state = AppState::CONNECTING;
-				Communicator::SendMsg(Action::INIT, L"", (SOCKET)wParam);
+				auto rtc = WSAGETSELECTERROR(lParam);
+				if (rtc == 0) {
+					ContextSingleton::GetInstance().state = AppState::CONNECTING;
+					Communicator::SendMsg(Action::INIT, L"", (SOCKET)wParam);
+				}
+				else {
+					if (autoConnect) {
+						AutoConnect(hWnd);
+					}
+					else {
+						MessageBox(hWnd, L"Could not connect to server", L"Connection failed", MB_ICONINFORMATION | MB_OK);
+						SetWaitingCW(hWnd, false);
+					}
+				}
 				break;
 			}
 			}
@@ -216,7 +275,7 @@ namespace PlusPlusChat {
 			L"Connection Window",
 			L"PlusPlusChat",
 			WS_OVERLAPPEDWINDOW,
-			200, 200, 435, 225,
+			200, 200, 435, 245,
 			NULL,
 			NULL,
 			hInstance,
@@ -224,7 +283,7 @@ namespace PlusPlusChat {
 		return hWnd;
 	}
 
-	bool ConnectToServer(HWND hWnd, std::int_fast32_t port, wchar_t* ipAddress) {
+	bool ConnectToServer(HWND hWnd, std::int_fast32_t port, const wchar_t* ipAddress) {
 		// resolve IP address
 		in_addr address;
 		int nResult = InetPton(AF_INET, ipAddress, &address);
@@ -246,10 +305,7 @@ namespace PlusPlusChat {
 		nResult = WSAStartup(MAKEWORD(2, 2), &WsaDat);
 		if (nResult != 0)
 		{
-			MessageBox(hWnd,
-				L"Winsock initialization failed",
-				L"Critical Error",
-				MB_ICONERROR);
+			MessageBox(hWnd, L"Winsock initialization failed", L"Critical Error", MB_ICONERROR);
 			SendMessage(hWnd, WM_DESTROY, NULL, NULL);
 			return false;
 		}
@@ -257,10 +313,7 @@ namespace PlusPlusChat {
 		ContextSingleton::GetInstance().Socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		if (ContextSingleton::GetInstance().Socket == INVALID_SOCKET)
 		{
-			MessageBox(hWnd,
-				L"Socket creation failed",
-				L"Critical Error",
-				MB_ICONERROR);
+			MessageBox(hWnd, L"Socket creation failed", L"Critical Error", MB_ICONERROR);
 			SendMessage(hWnd, WM_DESTROY, NULL, NULL);
 			return false;
 		}
@@ -268,26 +321,10 @@ namespace PlusPlusChat {
 		nResult = WSAAsyncSelect(ContextSingleton::GetInstance().Socket, hWnd, WM_SOCKET, (FD_CLOSE | FD_READ | FD_CONNECT));
 		if (nResult)
 		{
-			MessageBox(hWnd,
-				L"WSAAsyncSelect failed",
-				L"Critical Error",
-				MB_ICONERROR);
+			MessageBox(hWnd, L"WSAAsyncSelect failed", L"Critical Error", MB_ICONERROR);
 			SendMessage(hWnd, WM_DESTROY, NULL, NULL);
 			return false;
 		}
-
-
-		//// Resolve IP address for hostname
-		//struct hostent *host;
-		//if ((host = getaddrI(ipAddress)) == NULL)
-		//{
-		//	MessageBox(hWnd,
-		//		L"Unable to resolve host name",
-		//		L"Critical Error",
-		//		MB_ICONERROR);
-		//	SendMessage(hWnd, WM_DESTROY, NULL, NULL);
-		//	return false;
-		//}
 
 		// Set up our socket address structure
 		SOCKADDR_IN SockAddr;
@@ -303,5 +340,111 @@ namespace PlusPlusChat {
 		UnregisterClass(L"Connection Window", GetModuleHandle(NULL));
 		DestroyWindow(ContextSingleton::GetInstance().connectionWindow);
 		ContextSingleton::GetInstance().connectionWindow = NULL;
+	}
+
+	void SetWaitingCW(HWND hWnd, bool waiting) {
+		if (waiting) {
+			// disable interactive components
+			EnableWindow(GetDlgItem(hWnd, IDC_CW_CONNECTBTN), false);
+			EnableWindow(GetDlgItem(hWnd, IDC_CW_IPEDIT), false);
+			EnableWindow(GetDlgItem(hWnd, IDC_CW_PORTEDIT), false);
+			EnableWindow(GetDlgItem(hWnd, IDC_CW_AUTOCONNECTBTN), false);
+			// set waiting cursor
+			SetCursor(ContextSingleton::GetInstance().waitCursor);
+			// show progress
+			auto progress = GetDlgItem(hWnd, IDC_CW_PROGRESS);
+			ShowWindow(progress, SW_SHOW);
+			SendMessage(progress, PBM_SETMARQUEE, 1, (LPARAM)NULL);
+		}
+		else {
+			// enable interactive components
+			EnableWindow(GetDlgItem(hWnd, IDC_CW_CONNECTBTN), true);
+			EnableWindow(GetDlgItem(hWnd, IDC_CW_IPEDIT), true);
+			EnableWindow(GetDlgItem(hWnd, IDC_CW_PORTEDIT), true);
+			EnableWindow(GetDlgItem(hWnd, IDC_CW_AUTOCONNECTBTN), true);
+			// set default cursor
+			SetCursor(ContextSingleton::GetInstance().defaultCursor);
+			// hide progress
+			auto progress = GetDlgItem(hWnd, IDC_CW_PROGRESS);
+			ShowWindow(progress, SW_HIDE);
+			SendMessage(progress, PBM_SETMARQUEE, 0, (LPARAM)NULL);
+		}
+	}
+
+	std::vector<configRecord> ParseConfig(std::ifstream & ifs) {
+		std::string line;
+		std::vector<configRecord> rtc;
+		while (std::getline(ifs, line))
+		{
+			configRecord record;
+			record.valid = false;
+			std::istringstream iss(line);
+			int ip[4];
+			char d[3];
+			if (!(iss >> ip[0] >> d[0] >> ip[1] >> d[1] >> ip[2] >> d[2] >> ip[3])) {
+				// wrong line, skip
+				continue;
+			} 
+			// check if it is IP address
+			bool valid = true;
+			for (size_t i = 0; i < 4; i++)
+			{
+				if (ip[i] < 0 || ip[i] > 255) {
+					valid = false;
+					break;
+				}
+			}
+			for (size_t i = 0; i < 3; i++)
+			{
+				if (d[i] != '.') {
+					valid = false;
+					break;
+				}
+			}
+			if (valid) {
+				//construct IP address;
+				std::wstring ipAddress = std::to_wstring(ip[0]);
+				for (size_t i = 1; i < 4; i++)
+				{
+					ipAddress += '.';
+					ipAddress += std::to_wstring(ip[i]);
+				}
+				// check if there is port
+				std::int_fast32_t port = 0;
+				if (!(iss >> d[0] >> ip[0])) {
+					// not a port number
+					valid = false;					
+				}
+				else if (d[0] == ':' && (ip[0] == 0 || (ip[0] >= 1024 && ip[0] <= 65535))) {
+					// set port number
+					port = ip[0];
+				}
+				if (valid) {
+					record.valid = true;
+					record.ipAddress = ipAddress;
+					record.port = port == 0 ? ContextSingleton::defaultPort : port;
+				}
+				rtc.push_back(record);
+			}
+		}
+		return rtc;
+	}
+
+	void AutoConnect(HWND hWnd) {
+		if (nextAutoconnect < autoConnections.size()) {
+			// try autoconnecting
+			while (nextAutoconnect < autoConnections.size() && !autoConnections[nextAutoconnect].valid) {
+				nextAutoconnect++;
+			}
+			if (nextAutoconnect < autoConnections.size()) {
+				ConnectToServer(hWnd, autoConnections[nextAutoconnect].port, autoConnections[nextAutoconnect].ipAddress.c_str());
+				nextAutoconnect++;
+				return;
+			}
+		}
+		// fallthrough here 
+		autoConnect = false;
+		MessageBox(hWnd, L"Could not find any active server", L"Failed to autoconnect", MB_ICONERROR);
+		SetWaitingCW(hWnd, false);
 	}
 }

@@ -57,11 +57,19 @@ namespace PlusPlusChat {
 			30, 93, 280, 100,
 			hWnd, (HMENU)IDC_RW_PUBLICROOM_LIST, GetModuleHandle(NULL), NULL);
 
-		// Create Join public room button
+		// Create refresh public rooms button
 		HWND hJoinPublicRoomBtn = CreateWindowEx(
 			0,
+			L"BUTTON", L"Refresh",
+			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
+			150, 198, 75, 23,
+			hWnd, (HMENU)IDC_RW_REFRESHPUBLICROOM_BTN, GetModuleHandle(NULL), NULL);
+
+		// Create Join public room button
+		HWND hRefreshPublicRoomsBtn = CreateWindowEx(
+			0,
 			L"BUTTON", L"Join Room",
-			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
+			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
 			235, 198, 75, 23,
 			hWnd, (HMENU)IDC_RW_JOINPUBLICROOM_BTN, GetModuleHandle(NULL), NULL);
 
@@ -85,7 +93,7 @@ namespace PlusPlusChat {
 		HWND hJoinPrivateRoomBtn = CreateWindowEx(
 			0,
 			L"BUTTON", L"Join Room",
-			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
+			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
 			235, 256, 75, 23,
 			hWnd, (HMENU)IDC_RW_JOINPRIVATEROOM_BTN, GetModuleHandle(NULL), NULL);
 
@@ -109,7 +117,7 @@ namespace PlusPlusChat {
 		HWND hNewPrivateRoomBtn = CreateWindowEx(
 			0,
 			L"BUTTON", L"Create Private Room",
-			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
+			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
 			30, 342, 135, 23,
 			hWnd, (HMENU)IDC_RW_NEWPRIVATEROOM_BTN, GetModuleHandle(NULL), NULL);
 
@@ -117,7 +125,7 @@ namespace PlusPlusChat {
 		HWND hNewPublicRoomBtn = CreateWindowEx(
 			0,
 			L"BUTTON", L"Create Public Room",
-			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
+			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
 			175, 342, 135, 23,
 			hWnd, (HMENU)IDC_RW_NEWPUBLICROOM_BTN, GetModuleHandle(NULL), NULL);
 
@@ -148,6 +156,8 @@ namespace PlusPlusChat {
 		SendMessage(hPublicRoomList, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));		
 
 		SendMessage(hJoinPublicRoomBtn, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+
+		SendMessage(hRefreshPublicRoomsBtn, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
 		SendMessage(hPrivateRoomGrp, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
@@ -201,6 +211,11 @@ namespace PlusPlusChat {
 				}
 				break;
 			}
+			case IDC_RW_REFRESHPUBLICROOM_BTN: {
+				Communicator::SendMsg(Action::GETROOMS, L"", ContextSingleton::GetInstance().Socket);
+				break;
+			}
+											
 			}
 			break;
 		}
@@ -352,11 +367,12 @@ namespace PlusPlusChat {
 		}
 
 		wchar_t roomNameBuff[31];
+		ZeroMemory(roomNameBuff, sizeof(roomNameBuff));	
 		size_t roomNameLength;
 		if (privateRoom) {
 			//extract room name
 			HWND hRoomName = GetDlgItem(hWnd, IDC_RW_PRIVATEROOM_TB);
-			SendMessage(hRoomName, WM_GETTEXT, sizeof(roomNameBuff), reinterpret_cast<LPARAM>(roomNameBuff));
+			SendMessage(hRoomName, WM_GETTEXT, sizeof(roomNameBuff), reinterpret_cast<LPARAM>(roomNameBuff));	
 			roomNameLength = wcslen(roomNameBuff);
 			if (roomNameLength == 0) {
 				MessageBox(hWnd, L"Chat room name is empty. Please, enter a name.", L"Error", MB_OK | MB_ICONERROR);
@@ -370,12 +386,18 @@ namespace PlusPlusChat {
 			// Get selected index.
 			int lbItem = (int)SendMessage(listBox, LB_GETCURSEL, 0, 0);
 
-			// Get item data.
-			size_t i = (size_t)SendMessage(listBox, LB_GETITEMDATA, lbItem, 0);
-			wcscpy_s(roomNameBuff, ContextSingleton::GetInstance().roomsList[i].c_str());
-			roomNameLength = wcslen(roomNameBuff);
-		}
-
+			if (lbItem != LB_ERR)
+			{
+				// Get item data.
+				size_t i = (size_t)SendMessage(listBox, LB_GETITEMDATA, lbItem, 0);
+				wcscpy_s(roomNameBuff, ContextSingleton::GetInstance().roomsList[i].c_str());
+				roomNameLength = wcslen(roomNameBuff);
+			}
+			else {
+				MessageBox(hWnd, L"No chat room was slected", L"Error", MB_OK | MB_ICONERROR);
+				return false;
+			}
+		}		
 		// Construct payload
 		wchar_t payload[64];
 

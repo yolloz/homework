@@ -19,7 +19,7 @@ namespace PlusPlusChat {
 #define WM_SOCKET		104	
 
 		AppState state = AppState::DISCONNECTED;
-		USHORT nPort = 5464;
+		const static USHORT defaultPort = 5464;
 		HWND connectionWindow = NULL;
 		HWND chatWindow = NULL;
 		HWND roomWindow = NULL;
