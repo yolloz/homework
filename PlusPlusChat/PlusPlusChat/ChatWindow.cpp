@@ -1,9 +1,7 @@
 #include "ChatWindow.h"
 
-
-//HWND hEditIn = NULL;
-//HWND hEditOut = NULL;
-wchar_t szHistory[10000];
+wchar_t szHistory[20000];
+std::vector<wchar_t> history;
 bool shiftDown = false;
 bool capturedEnter = false;
 WNDPROC oldEditProc;
@@ -71,10 +69,7 @@ namespace PlusPlusChat {
 
 			case FD_CLOSE:
 			{
-				MessageBox(hWnd,
-					L"Server closed connection",
-					L"Connection closed!",
-					MB_ICONINFORMATION | MB_OK);
+				MessageBox(hWnd, L"Server closed connection", L"Connection closed!", MB_ICONINFORMATION | MB_OK);
 				closesocket(ContextSingleton::GetInstance().Socket);
 				SendMessage(hWnd, WM_DESTROY, NULL, NULL);
 			}
@@ -156,17 +151,8 @@ namespace PlusPlusChat {
 		wchar_t buffer[7];
 		time_t t = time(0);   // get time now
 		struct tm * now = localtime(&t);
-		//int day = now->tm_mday;
-		//int month = now->tm_mon + 1;
 		int hour = now->tm_hour;
 		int minute = now->tm_min;
-		/*buffer[0] = L'0' + (day / 10);
-		buffer[1] = L'0' + (day % 10);
-		buffer[2] = L'.';
-		buffer[3] = L'0' + (month / 10);
-		buffer[4] = L'0' + (month % 10);
-		buffer[5] = L'.';
-		buffer[6] = L' ';*/
 		buffer[0] = L'0' + (hour / 10);
 		buffer[1] = L'0' + (hour % 10);
 		buffer[2] = L':';
@@ -177,15 +163,25 @@ namespace PlusPlusChat {
 		return std::wstring(buffer);
 	}
 
-	void ReceiveMessage(std::wstring & sender, std::wstring & message) {
-		std::wstring info = GetTime() + sender + L"\r\n";
-		wcsncat_s(szHistory, info.c_str(), info.length());
-		//wcscat_s(szHistory, L"\r\n");
+	void ReceiveMessageCH(std::wstring & sender, std::wstring & message) {
+		if (history.size() > 0) {
+			// remove null char
+			history.pop_back();
+		}
+		std::wstring info = GetTime() + sender + L"\r\n"; 
+		for (auto i = info.begin(); i < info.end(); i++)
+		{
+			history.push_back(*i);
+		}
 		std::wstring text = L">> " + message + L"\r\n";
-		wcsncat_s(szHistory, text.c_str(), text.length());
-		//wcscat_s(szHistory, L"\r\n");
+		for (auto i = text.begin(); i < text.end(); i++)
+		{
+			history.push_back(*i);
+		}
+		history.push_back(L'\0');
 
-		SendMessage(GetDlgItem(ContextSingleton::GetInstance().chatWindow, IDC_CH_HISTORY), WM_SETTEXT, 0, reinterpret_cast<LPARAM>(&szHistory));
+		SendMessage(GetDlgItem(ContextSingleton::GetInstance().chatWindow, IDC_CH_HISTORY), WM_SETTEXT, 0, reinterpret_cast<LPARAM>(history.data()));
+		SendMessage(GetDlgItem(ContextSingleton::GetInstance().chatWindow, IDC_CH_HISTORY), EM_LINESCROLL, 0, 65535);
 	}
 
 	void CreateChatWindowLayout(HWND hWnd) {

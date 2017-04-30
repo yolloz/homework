@@ -27,7 +27,7 @@ namespace PlusPlusChat {
 	ATOM WINAPI RegisterChatWindow(HINSTANCE hInstance);
 	LRESULT CALLBACK ChatWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	bool ActivateChatWindow(std::wstring & roomName, std::wstring & userName);
-	void ReceiveMessage(std::wstring & sender, std::wstring & message);
+	void ReceiveMessageCH(std::wstring & sender, std::wstring & message);
 	std::wstring GetTime();
 	void CreateChatWindowLayout(HWND hWnd);
 	void Send(HWND hWnd);

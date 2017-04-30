@@ -13,10 +13,6 @@ SOCKET & Server::ServerSocket() {
 	return GetInstance()._serverSocket;
 }
 
-//const std::map<SOCKET, std::uint64_t> & Server::Sockets() const{
-//	return _sockets;
-//}
-
 
 void Server::InitLookup() {
 	_msgLookup[L"INIT"] = Action::INIT;
@@ -53,18 +49,17 @@ std::uint64_t Server::GetNewID() {
 }
 
 bool Server::_CanAddClient() const{
-	return _activeClients < _maxActiveClients;
+	return _clients.size() < _maxActiveClients;
 }
 
 bool Server::_AddClient(SOCKET newSocket) {
-	if (_activeClients < _maxActiveClients) {
+	if (_clients.size() < _maxActiveClients) {
 		ClientDetails c;
 		auto id = GetNewID();
 		c.state = ClientState::NEW;
 		c.socket = newSocket;
 		_clients[id] = c;
 		_sockets[newSocket] = id;
-		_activeClients++;
 		return true;
 	}
 	return false;;
@@ -86,7 +81,6 @@ bool Server::_RemoveClient(SOCKET client) {
 		}
 		_clients.erase(id);
 		_sockets.erase(i);
-		_activeClients--;
 		return true;
 	}
 	return false;
@@ -283,10 +277,6 @@ void Server::_HandleError(ErrorCode code, SOCKET s) {
 	}
 }
 
-//void Server::ProcessMessage(wchar_t * message, SOCKET s) {
-//	GetInstance()._ProcessMessage(message, s);
-//}
-
 void Server::_ProcessMessage(wchar_t * message, SOCKET s) {
 	std::wstring ws(message);
 	// split message to tokens
@@ -294,8 +284,7 @@ void Server::_ProcessMessage(wchar_t * message, SOCKET s) {
 	if (tokens.size() >= 2) {
 		// check if it starts with unique code
 		if (tokens[0] == UNIQ) {
-			// set timestamp for client message
-			_timestamps[_sockets[s]] = time(0);
+			bool validReq = true;
 			// resolve action from 2nd token
 			auto action = ResolveAction(tokens[1]);
 			switch (action) {
@@ -369,7 +358,13 @@ void Server::_ProcessMessage(wchar_t * message, SOCKET s) {
 				}
 				break;
 			}
-
+			default:
+				validReq = false;
+				break;
+			}
+			if (validReq) {
+				// set timestamp for client message
+				_clients[_sockets[s]].timestamp = time(0);
 			}
 		}
 	}
@@ -423,16 +418,38 @@ void Server::StartListening(HWND hWnd, std::int_fast32_t port) {
 
 void Server::_Ping() {
 	time_t currTime = time(0);
-	for (auto && i : _timestamps)
+	for (auto && i : _clients)
 	{
-		if (currTime - i.second > 600) {
+		if (currTime - i.second.timestamp > 600) {
 			// disconnect client
-			_RemoveClient(_clients[i.first].socket);
+			_RemoveClient(i.second.socket);
 		}
 		else {
-			SendMsg(Action::PING, L"", _clients[i.first].socket);
+			SendMsg(Action::PING, L"", i.second.socket);
 		}
 	}
+}
+
+Server::ServerDetails Server::_GetDetails() {
+	ServerDetails rtc;
+	rtc.allClients = _clients.size();
+	for (auto i = _clients.begin(); i != _clients.end(); i++)
+	{
+		if (i->second.state == ClientState::CHATTING) {
+			rtc.chattingClients++;
+		}
+	}
+	rtc.allRooms = _chatRooms.size();
+	for (auto i = _chatRooms.begin(); i != _chatRooms.end(); i++)
+	{
+		if (i->second.privateRoom) {
+			rtc.privateRooms++;
+		}
+		else {
+			rtc.publicRooms++;
+		}
+	}
+	return rtc;
 }
 
 Server::Server() {}

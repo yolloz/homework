@@ -18,7 +18,6 @@ namespace PlusPlusChat {
 					DeactivateConnectionWindow();
 					ActivateRoomWindow();
 
-					//Communicator::SendMsg(Action::ACK, L"", s);	
 					// ask server to fill list box
 					Communicator::SendMsg(Action::GETROOMS, L"", s);
 					break;
@@ -50,7 +49,7 @@ namespace PlusPlusChat {
 					if (ContextSingleton::GetInstance().state == AppState::CHATTING) {
 						// cut out message
 						std::wstring text(ws, tokens[0].length() + tokens[1].length() + tokens[2].length() + 3);
-						ReceiveMessage(tokens[2], text);
+						ReceiveMessageCH(tokens[2], text);
 					}
 					break;
 				}
@@ -118,11 +117,6 @@ namespace PlusPlusChat {
 			break;
 		}
 
-		/*case Action::ACK: {
-			p = BuildMessage(L"ACK");
-			break;
-		}*/
-
 		case Action::CREATE: {
 			p = BuildMessage(L"CREATE", payload);
 			break;
@@ -175,7 +169,6 @@ namespace PlusPlusChat {
 	void Communicator::InitLookup() {
 		_actionLookup[L"TINI"] = Action::TINI;
 		_actionLookup[L"INIT"] = Action::INIT;
-		//_actionLookup[L"ACK"] = Action::ACK;
 		_actionLookup[L"ERR"] = Action::ERR;
 		_actionLookup[L"ROOMS"] = Action::ROOMS;
 		_actionLookup[L"INVALID_ACTION"] = Action::INVALID_ACTION;

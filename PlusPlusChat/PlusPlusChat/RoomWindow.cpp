@@ -140,40 +140,43 @@ namespace PlusPlusChat {
 		// Hide progress bar
 		ShowWindow(hProgress, SW_HIDE);
 
-		/*if (!hIpEdit || !hIpLbl)
+		if (!hUsernameGrp || !hUsernameTb || !hPublicRoomGrp || !hPublicRoomList || !hRefreshPublicRoomsBtn 
+			|| !hJoinPublicRoomBtn || !hPrivateRoomGrp || !hPrivateRoomTb || !hJoinPrivateRoomBtn || !hNewRoomGrp 
+			|| !hNewRoomTb || !hNewPrivateRoomBtn || !hNewPublicRoomBtn || !hProgress)
 		{
 			MessageBox(hWnd, L"Could not create window layout.", L"Error", MB_OK | MB_ICONERROR);
-		}*/
+		}
+		else {
+			// initialize controls
+			SendMessage(hUsernameGrp, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
-		// initialize controls
-		SendMessage(hUsernameGrp, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+			SendMessage(hUsernameTb, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+			SendMessage(hUsernameTb, EM_LIMITTEXT, 30, NULL);
 
-		SendMessage(hUsernameTb, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
-		SendMessage(hUsernameTb, EM_LIMITTEXT, 30, NULL);
+			SendMessage(hPublicRoomGrp, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
-		SendMessage(hPublicRoomGrp, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+			SendMessage(hPublicRoomList, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
-		SendMessage(hPublicRoomList, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));		
+			SendMessage(hJoinPublicRoomBtn, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
-		SendMessage(hJoinPublicRoomBtn, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+			SendMessage(hRefreshPublicRoomsBtn, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
-		SendMessage(hRefreshPublicRoomsBtn, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+			SendMessage(hPrivateRoomGrp, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
-		SendMessage(hPrivateRoomGrp, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+			SendMessage(hPrivateRoomTb, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+			SendMessage(hPrivateRoomTb, EM_LIMITTEXT, 30, NULL);
 
-		SendMessage(hPrivateRoomTb, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
-		SendMessage(hPrivateRoomTb, EM_LIMITTEXT, 30, NULL);
-		
-		SendMessage(hJoinPrivateRoomBtn, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+			SendMessage(hJoinPrivateRoomBtn, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
-		SendMessage(hNewRoomGrp, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+			SendMessage(hNewRoomGrp, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
-		SendMessage(hNewRoomTb, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
-		SendMessage(hNewRoomTb, EM_LIMITTEXT, 30, NULL);
+			SendMessage(hNewRoomTb, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+			SendMessage(hNewRoomTb, EM_LIMITTEXT, 30, NULL);
 
-		SendMessage(hNewPrivateRoomBtn, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+			SendMessage(hNewPrivateRoomBtn, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
-		SendMessage(hNewPublicRoomBtn, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+			SendMessage(hNewPublicRoomBtn, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+		}		
 	}
 
 	LRESULT CALLBACK RoomWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -491,6 +494,8 @@ namespace PlusPlusChat {
 		{
 			auto && vct = ContextSingleton::GetInstance().roomsList;
 			auto listBox = GetDlgItem(hWnd, IDC_RW_PUBLICROOM_LIST);
+			// delete all current items
+			SendMessage(listBox, LB_RESETCONTENT, 0, 0);
 			for (size_t i = 0; i < vct.size(); i++)
 			{
 				// insert item

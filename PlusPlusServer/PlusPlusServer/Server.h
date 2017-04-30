@@ -32,12 +32,21 @@ public:
 		ClientState state;
 		std::wstring alias;
 		std::uint64_t chatroomID;
+		time_t timestamp;
 	};
 
 	struct RoomDetails {
 		std::wstring name;
 		bool privateRoom;
 		std::unordered_set<std::uint64_t> members;
+	};
+
+	struct ServerDetails {
+		int allClients = 0;
+		int chattingClients = 0;
+		int allRooms = 0;
+		int privateRooms = 0;
+		int publicRooms = 0;
 	};
 
 	const static std::int_fast32_t defaultPort = 5464;
@@ -68,6 +77,9 @@ public:
 	static inline void Ping() {
 		GetInstance()._Ping();
 	}
+	static inline ServerDetails GetDetails() {
+		return GetInstance()._GetDetails();
+	}
 
 	// temporary 
 	wchar_t szHistory[10000];
@@ -85,9 +97,9 @@ private:
 	std::map<SOCKET, std::uint64_t> _sockets;
 	std::map<std::uint64_t, RoomDetails> _chatRooms;
 	std::map<std::uint64_t, ClientDetails> _clients;
-	std::map<std::uint64_t, time_t> _timestamps;
-	const std::int_fast32_t _maxActiveClients = 100;
-	std::uint64_t _activeClients = 0;
+	//std::map<std::uint64_t, time_t> _timestamps;
+	const size_t _maxActiveClients = 100;
+	//std::uint64_t _activeClients = 0;
 	std::uint64_t _id = 1;
 	const std::wstring UNIQ = L"#PPChat";
 	const wchar_t SPACE = L' ';
@@ -109,6 +121,7 @@ private:
 	std::wstring GetPublicRooms() const;
 	void ClientConnected(SOCKET client);
 	void _Ping();
+	ServerDetails _GetDetails();
 
 	// helper functions
 	template<typename Out>

@@ -104,29 +104,29 @@ namespace PlusPlusChat {
 		// Hide progress bar
 		ShowWindow(hProgress, SW_HIDE);
 
-		if (!hIpEdit || !hIpLbl)
-		{
+		if (!hManualConnectGrp || !hPortNumber || !hPortLbl || !hConnectBtn || !hAutoConnectGrp || !hAutoConnectBtn || !hProgress || !hIpEdit || !hIpLbl) {
 			MessageBox(hWnd, L"Could not create window layout.", L"Error", MB_OK | MB_ICONERROR);
 		}
+		else {
+			// initialize controls
+			SendMessage(hManualConnectGrp, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
-		// initialize controls
-		SendMessage(hManualConnectGrp, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+			SendMessage(hIpLbl, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
-		SendMessage(hIpLbl, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+			SendMessage(hIpEdit, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+			SendMessage(hIpEdit, EM_LIMITTEXT, 15, NULL);
 
-		SendMessage(hIpEdit, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
-		SendMessage(hIpEdit, EM_LIMITTEXT, 15, NULL);
+			SendMessage(hPortNumber, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+			SendMessage(hPortNumber, EM_LIMITTEXT, 5, NULL);
 
-		SendMessage(hPortNumber, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
-		SendMessage(hPortNumber, EM_LIMITTEXT, 5, NULL);
+			SendMessage(hPortLbl, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
-		SendMessage(hPortLbl, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+			SendMessage(hConnectBtn, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
-		SendMessage(hConnectBtn, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+			SendMessage(hAutoConnectGrp, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
 
-		SendMessage(hAutoConnectGrp, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
-
-		SendMessage(hAutoConnectBtn, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+			SendMessage(hAutoConnectBtn, WM_SETFONT, (WPARAM)defaultFont, MAKELPARAM(FALSE, 0));
+		}		
 	}
 
 	LRESULT CALLBACK ConnectionWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
