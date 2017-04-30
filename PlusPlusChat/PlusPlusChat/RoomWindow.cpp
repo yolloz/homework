@@ -432,6 +432,7 @@ namespace PlusPlusChat {
 		}
 		payload[3 + roomNameLength + usernameLength] = 0;
 		Communicator::SendMsg(Action::JOIN, payload, ContextSingleton::GetInstance().Socket);
+		return true;
 	}
 
 	bool CreateNewRoom(HWND hWnd, bool privateRoom) {
@@ -486,6 +487,7 @@ namespace PlusPlusChat {
 		}
 		payload[3 + roomNameLength + usernameLength] = 0;
 		Communicator::SendMsg(Action::CREATE, payload, ContextSingleton::GetInstance().Socket);
+		return true;
 	}
 
 	void ReloadPublicRoomsList() {
