@@ -226,7 +226,7 @@ namespace PlusPlusChat {
 			{
 			case FD_READ:
 			{
-				wchar_t incoming[1024];
+				wchar_t incoming[1100];
 				ZeroMemory(incoming, sizeof(incoming));
 
 				int inDataLength = recv((SOCKET)wParam, (char*)incoming, sizeof(incoming) / sizeof((char)incoming[0]), 0);

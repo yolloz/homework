@@ -13,7 +13,6 @@ SOCKET & Server::ServerSocket() {
 	return GetInstance()._serverSocket;
 }
 
-
 void Server::InitLookup() {
 	_msgLookup[L"INIT"] = Action::INIT;
 	//_msgLookup[L"ACK"] = Action::ACK;
@@ -27,6 +26,8 @@ void Server::InitLookup() {
 	_msgLookup[L"RECV"] = Action::RECV;
 	_msgLookup[L"PING"] = Action::PING;
 	_msgLookup[L"PONG"] = Action::PONG;
+	_msgLookup[L"HISTORY"] = Action::HISTORY;
+	_msgLookup[L"GETHISTORY"] = Action::GETHISTORY;
 }
 
 Action Server::ResolveAction(std::wstring & msg) {
@@ -93,11 +94,11 @@ std::uint64_t Server::AddChatRoom(std::wstring & name, bool privateRoom) {
 			return 0;
 		}
 	}
-	RoomDetails r;
+	auto id = GetNewID();
+	RoomDetails & r = _chatRooms[id];
 	r.name = name;
 	r.privateRoom = privateRoom;
-	auto id = GetNewID();
-	_chatRooms[id] = r;
+	r.history.SetSize(cacheSize);
 	return id;
 }
 
@@ -234,13 +235,17 @@ void Server::SendMsg(Action action, const std::wstring & payload, SOCKET s) {
 		p = BuildMessage(L"PING");
 		break;
 
+	case Action::HISTORY:
+		p = BuildMessage(L"HISTORY", payload);
+		break;
+
 	default: 
 		valid = false;
 		break;	
 	}
 	if (valid) {
 		const wchar_t * msg(p.c_str());
-		send(s, (char *)msg, wcslen(msg) * 2, 0);
+		send(s, (char *)msg, (wcslen(msg) + 1) * 2, 0);
 	}
 }
 
@@ -277,10 +282,9 @@ void Server::_HandleError(ErrorCode code, SOCKET s) {
 	}
 }
 
-void Server::_ProcessMessage(wchar_t * message, SOCKET s) {
-	std::wstring ws(message);
+void Server::_ProcessMessage(std::wstring & message, SOCKET s) {
 	// split message to tokens
-	std::vector<std::wstring> tokens = split(ws, L' ');
+	std::vector<std::wstring> tokens = split(message, L' ');
 	if (tokens.size() >= 2) {
 		// check if it starts with unique code
 		if (tokens[0] == UNIQ) {
@@ -340,13 +344,14 @@ void Server::_ProcessMessage(wchar_t * message, SOCKET s) {
 
 			case Action::SEND: {
 				if (tokens.size() > 2) {
-					std::wstring text(ws, tokens[0].length() + tokens[1].length() + 2);
+					std::wstring text(message, tokens[0].length() + tokens[1].length() + 2);
 					if (text.length() > 0) {
 						// resend message to all clients in the room
 						auto clientID = _sockets[s];
 						auto && client = _clients[clientID];
 						auto && room = _chatRooms[client.chatroomID];
 						std::wstring payload = client.alias + SPACE + text;
+						room.history.Add(client.alias, text, time(0));
 						for each (auto id in room.members)
 						{
 							SendMsg(Action::RECV, payload, _clients[id].socket);
@@ -355,6 +360,19 @@ void Server::_ProcessMessage(wchar_t * message, SOCKET s) {
 				}
 				else {
 					_HandleError(ErrorCode::INVALID_REQUEST, s);
+				}
+				break;
+			}
+
+			case Action::GETHISTORY: {
+				auto clientId = _sockets[s];
+				auto && client = _clients[clientId];
+				if (client.state == ClientState::CHATTING) {
+					auto && room = _chatRooms[client.chatroomID];
+					for (auto i = room.history.begin(); i != room.history.end(); i++)
+					{						
+						SendMsg(Action::HISTORY, std::to_wstring(i->time) + SPACE + i->sender + SPACE + i->text, s);
+					}
 				}
 				break;
 			}

@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\PlusPlusChat_shared\PlusPlusHelpers.cpp" />
     <ClCompile Include="ChatWindow.cpp" />
     <ClCompile Include="Communicator.cpp" />
     <ClCompile Include="ConnectionWindow.cpp" />
@@ -27,6 +28,7 @@
     <ClCompile Include="RoomWindow.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\PlusPlusChat_shared\PlusPlusHelpers.h" />
     <ClInclude Include="ChatWindow.h" />
     <ClInclude Include="Communicator.h" />
     <ClInclude Include="ConnectionWindow.h" />

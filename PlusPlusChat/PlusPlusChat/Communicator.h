@@ -37,7 +37,7 @@ namespace PlusPlusChat {
 			return elems;
 		}
 
-		static bool ProcessMessage(wchar_t * message, SOCKET s);
+		static bool ProcessMessage(const wchar_t * message, SOCKET s);
 		static std::wstring BuildMessage(const std::wstring & action, const std::wstring & payload);
 		static std::wstring BuildMessage(const std::wstring & action);
 		static void SendMsg(Action action, const std::wstring & payload, SOCKET s);

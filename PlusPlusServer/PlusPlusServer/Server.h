@@ -25,6 +25,85 @@
 
 class Server
 {
+private:
+	class MessageCache {
+	public:
+
+		struct Message {
+			time_t time;
+			std::wstring sender;
+			std::wstring text;
+		};
+
+		class iterator : public std::iterator<std::input_iterator_tag, Message> {
+		private:
+			MessageCache * cache;
+			size_t idx;
+		public:
+			iterator(MessageCache * cache, size_t idx = 0) : cache(cache), idx(idx) {}
+			inline bool operator==(iterator other) {
+				return idx == other.idx;
+			}
+			inline bool operator!=(iterator other) {
+				return idx != other.idx;
+			}
+			inline iterator& operator++() {
+				idx = idx == cache->endIdx ? cache->endIdx : idx + 1;
+				idx %= cache->size;
+				return *this;
+			}
+			inline iterator operator++(int) {
+				iterator retval = *this;
+				++(*this);
+				return retval;
+			}
+			inline reference operator*() const {
+				return cache->Get(idx);
+			}
+			inline Message * operator->() {
+				return &cache->Get(idx);
+			}
+		};
+
+		inline iterator begin() {
+			return iterator(this, startIdx);
+		}
+
+		inline iterator end() {
+			return iterator(this, endIdx);
+		}
+
+		inline void Add(std::wstring & sender, std::wstring & text, time_t time) {
+			auto && p = _messages[endIdx];
+			p.time = time;
+			p.text = text;
+			p.sender = sender;
+			endIdx = (endIdx + 1) % size;
+			if (endIdx == startIdx) {
+				startIdx = (startIdx + 1) % size;
+			}
+		}
+
+		inline void SetSize(size_t size) {
+			// add one free space as end pointer
+			size++;
+			this->size = size;
+			_messages.resize(size);
+			endIdx = 0;
+			startIdx = 0;
+		}
+
+	private:
+		size_t size = -1;
+		size_t startIdx = 0;
+		size_t endIdx = 0;
+		std::vector<Message> _messages;
+
+		inline Message & Get(size_t idx) {
+			return _messages[idx];
+		}
+	};
+
 public:
 
 	struct ClientDetails {
@@ -39,6 +118,7 @@ public:
 		std::wstring name;
 		bool privateRoom;
 		std::unordered_set<std::uint64_t> members;
+		MessageCache history;
 	};
 
 	struct ServerDetails {
@@ -50,19 +130,16 @@ public:
 	};
 
 	const static std::int_fast32_t defaultPort = 5464;
-	
-	
 
 	static Server& GetInstance();
 	static AppState& State();
 	static SOCKET & ServerSocket();
 	static Action ResolveAction(std::wstring & msg);
-	//const std::map<SOCKET, std::uint64_t> & Sockets() const;
 	static inline bool CanAddClient() {
 		return GetInstance()._CanAddClient();
 	}
 	static void StartListening(HWND hWnd, std::int_fast32_t port);
-	static inline void ProcessMessage(wchar_t * message, SOCKET s) {
+	static inline void ProcessMessage(std::wstring & message, SOCKET s) {
 		GetInstance()._ProcessMessage(message, s);
 	}
 	static inline void HandleError(ErrorCode code, SOCKET s) {
@@ -80,9 +157,6 @@ public:
 	static inline ServerDetails GetDetails() {
 		return GetInstance()._GetDetails();
 	}
-
-	// temporary 
-	wchar_t szHistory[10000];
 	
 	// disable copying
 	Server(Server const&) = delete;
@@ -97,17 +171,16 @@ private:
 	std::map<SOCKET, std::uint64_t> _sockets;
 	std::map<std::uint64_t, RoomDetails> _chatRooms;
 	std::map<std::uint64_t, ClientDetails> _clients;
-	//std::map<std::uint64_t, time_t> _timestamps;
 	const size_t _maxActiveClients = 100;
-	//std::uint64_t _activeClients = 0;
 	std::uint64_t _id = 1;
 	const std::wstring UNIQ = L"#PPChat";
 	const wchar_t SPACE = L' ';
+	size_t cacheSize = 5;
 
 	bool _CanAddClient() const;
 	bool _AddClient(SOCKET newSocket);
 	bool _RemoveClient(SOCKET client);
-	void _ProcessMessage(wchar_t * message, SOCKET s);
+	void _ProcessMessage(std::wstring & message, SOCKET s);
 	void _HandleError(ErrorCode code, SOCKET s);
 	void InitLookup();
 	std::uint64_t GetNewID();
@@ -138,9 +211,7 @@ private:
 		std::vector<std::wstring> elems;
 		split(s, delim, std::back_inserter(elems));
 		return elems;
-	}
-
-	
+	}	
 };
 
 #endif

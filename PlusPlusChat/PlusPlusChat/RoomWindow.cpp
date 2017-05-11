@@ -248,14 +248,40 @@ namespace PlusPlusChat {
 			{
 			case FD_READ:
 			{
-				wchar_t incoming[1024];
-				ZeroMemory(incoming, sizeof(incoming));
-
-				int inDataLength = recv((SOCKET)wParam, (char*)incoming, sizeof(incoming) / sizeof((char)incoming[0]), 0);
-
-				if (inDataLength != -1)
+				std::vector<wchar_t> incoming(1100, 0);
+				auto q = incoming.size() * sizeof(incoming[0]);
+				int inDataLength = recv((SOCKET)wParam, (char*)incoming.data(), incoming.size() * sizeof(incoming[0]), 0);
+				while (inDataLength == q) {
+					incoming.resize(q, 0);
+					inDataLength = recv((SOCKET)wParam, (char*)incoming.data(), incoming.size() * sizeof(incoming[0]), 0);
+				}
+				bool wasNull = true;
+				auto start = incoming.begin();
+				std::vector<std::wstring> messages;
+				for (auto  i = incoming.begin(); i < incoming.end(); i++)
 				{
-					Communicator::ProcessMessage(incoming, (SOCKET)wParam);
+					if (*i == 0) {
+						if (wasNull) {
+							// two nulls mean nothing is behind this
+							break;
+						}
+						else {
+							wasNull = true;
+							// cut message
+							messages.push_back(std::wstring(start, i));
+						}
+					}
+					else {
+						if (wasNull) {
+							wasNull = false;
+							start = i;
+						}
+					}
+				}
+
+				for (auto m : messages)
+				{
+					Communicator::ProcessMessage(m.c_str(), (SOCKET)wParam);
 				}
 			}
 			break;

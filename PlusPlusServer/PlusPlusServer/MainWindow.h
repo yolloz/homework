@@ -23,6 +23,7 @@
 #include <ctime>
 #include "Server.h"
 #include "resource.h"
+#include "../../PlusPlusChat_shared/PlusPlusHelpers.h"
 
 HWND CreateMainWindow(HINSTANCE hInstance);
 LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);

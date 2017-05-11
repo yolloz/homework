@@ -1,14 +1,16 @@
 #ifndef PLUSPLUSSERVER_ENUMS_
 #define PLUSPLUSSERVER_ENUMS_
 
+#include "../../PlusPlusChat_shared/SharedEnums.h"
+
 enum AppState
 {
 	LISTENING, STOPPED
 };
 
-enum Action {
-	INIT, TINI, /*ACK,*/ ERR, CREATE, JOIN, GETROOMS, ROOMS, JOINED, SEND, RECV, PING, PONG, INVALID_ACTION
-};
+//enum Action {
+//	INIT, TINI, /*ACK,*/ ERR, CREATE, JOIN, GETROOMS, ROOMS, JOINED, SEND, RECV, PING, PONG, INVALID_ACTION
+//};
 
 enum ClientState {
 	NEW, CONNECTED, CHATTING

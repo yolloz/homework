@@ -26,8 +26,6 @@ ATOM WINAPI RegisterMainWindow(HINSTANCE hInst) {
 }
 
 void CreateMainWindowLayout(HWND hWnd) {
-	ZeroMemory(Server::GetInstance().szHistory, sizeof(Server::GetInstance().szHistory));
-
 	/***  DETAILS SECTION  **/
 
 	// Create details groupbox
@@ -287,6 +285,8 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 				HWND hPortNumber = GetDlgItem(hWnd, IDC_PORTNUMBER);
 				std::wstring noTime = L"--:--";
 				UpdateUI(hWnd, Server::ServerDetails(), noTime);
+				SendMessage(GetDlgItem(hWnd, IDC_MAIN_BUTTON), WM_SETTEXT, NULL, (LPARAM)L"Start");
+				EnableWindow(hPortNumber, true);
 				Server::State() = AppState::STOPPED;
 			}
 			break;
@@ -319,19 +319,13 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		{
 		case FD_READ:
 		{
-			wchar_t incoming[1024];
-			ZeroMemory(incoming, sizeof(incoming));
+			std::vector<std::wstring> messages;
 
-			int inDataLength = recv((SOCKET)wParam, (char*)incoming, sizeof(incoming) / sizeof((char)incoming[0]), 0);
-
-			if (inDataLength != -1)
-			{
-				wcsncat_s(Server::GetInstance().szHistory, incoming, inDataLength);
-				wcscat_s(Server::GetInstance().szHistory, L"\r\n");
-
-				SendMessage(GetDlgItem(hWnd, IDC_EDIT_IN), WM_SETTEXT, sizeof(incoming) - 1, reinterpret_cast<LPARAM>(&Server::GetInstance().szHistory));
-
-				Server::ProcessMessage(incoming, (SOCKET)wParam);
+			if (ReceiveData(messages, (SOCKET)wParam) != SOCKET_ERROR) {
+				for (auto && m : messages)
+				{
+					Server::ProcessMessage(m, (SOCKET)wParam);
+				}
 			}
 			break;
 		}

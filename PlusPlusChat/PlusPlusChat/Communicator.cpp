@@ -5,7 +5,7 @@ namespace PlusPlusChat {
 	const std::wstring Communicator::SPACE = L" ";
 	std::map<std::wstring, Action> Communicator::_actionLookup;
 
-	bool Communicator::ProcessMessage(wchar_t * message, SOCKET s) {
+	bool Communicator::ProcessMessage(const wchar_t * message, SOCKET s) {
 		std::wstring ws(message);
 		std::vector<std::wstring> tokens = Communicator::split(ws, L' ');
 		if (tokens.size() >= 2) {
@@ -40,7 +40,8 @@ namespace PlusPlusChat {
 					if (ContextSingleton::GetInstance().state == AppState::JOINING) {
 						ContextSingleton::GetInstance().state = AppState::CHATTING;
 						DeactivateRoomWindow();
-						ActivateChatWindow(tokens[2], tokens[3]);						
+						ActivateChatWindow(tokens[2], tokens[3]);
+						SendMsg(Action::GETHISTORY, L"", s);
 					}
 					break;
 				}
@@ -49,7 +50,25 @@ namespace PlusPlusChat {
 					if (ContextSingleton::GetInstance().state == AppState::CHATTING) {
 						// cut out message
 						std::wstring text(ws, tokens[0].length() + tokens[1].length() + tokens[2].length() + 3);
-						ReceiveMessageCH(tokens[2], text);
+						ReceiveMessageCH(tokens[2], 0, text);
+					}
+					break;
+				}
+
+				case Action::HISTORY: {
+					if (ContextSingleton::GetInstance().state == AppState::CHATTING) {
+						if (tokens.size() > 4) {
+							// cut out message
+							std::wstring text(ws, tokens[0].length() + tokens[1].length() + tokens[2].length() + tokens[3].length() + 4);
+							time_t t = 0;
+							try {
+								t = std::stoull(tokens[2]);
+							}
+							catch (...){
+								t = 0;
+							}
+							ReceiveMessageCH(tokens[3], t, text);
+						}
 					}
 					break;
 				}
@@ -141,6 +160,10 @@ namespace PlusPlusChat {
 			p = BuildMessage(L"PONG");
 			break;
 
+		case Action::GETHISTORY:
+			p = BuildMessage(L"GETHISTORY");
+			break;
+
 		default: {
 			valid = false;
 			break;
@@ -149,7 +172,7 @@ namespace PlusPlusChat {
 		// send message if action is valid
 		if (valid) {
 			const wchar_t * msg(p.c_str());
-			send(s, (char *)msg, wcslen(msg) * 2, 0);
+			send(s, (char *)p.c_str(), (p.length() + 1) * 2, 0);
 		}
 	}
 
@@ -177,5 +200,7 @@ namespace PlusPlusChat {
 		_actionLookup[L"RECV"] = Action::RECV;
 		_actionLookup[L"PING"] = Action::PING;
 		_actionLookup[L"PONG"] = Action::PONG;
+		_actionLookup[L"HISTORY"] = Action::HISTORY;
+		_actionLookup[L"GETHISTORY"] = Action::GETHISTORY;
 	}
 }

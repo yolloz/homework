@@ -1,12 +1,9 @@
 #include "ChatWindow.h"
 
-wchar_t szHistory[20000];
 std::vector<wchar_t> history;
 bool shiftDown = false;
 bool capturedEnter = false;
 WNDPROC oldEditProc;
-
-
 
 namespace PlusPlusChat {
 	LRESULT CALLBACK ChatWindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -44,25 +41,26 @@ namespace PlusPlusChat {
 		{
 			if (WSAGETSELECTERROR(lParam))
 			{
-				MessageBox(hWnd,
-					L"Connection to server failed",
-					L"Error",
-					MB_OK | MB_ICONERROR);
-				SendMessage(hWnd, WM_DESTROY, NULL, NULL);
-				break;
+				if (lParam != WSAEMSGSIZE) {
+					MessageBox(hWnd,
+						L"Connection to server failed",
+						L"Error",
+						MB_OK | MB_ICONERROR);
+					SendMessage(hWnd, WM_DESTROY, NULL, NULL);
+					break;
+				}
 			}
 			switch (WSAGETSELECTEVENT(lParam))
 			{
 			case FD_READ:
 			{
-				wchar_t incoming[1024];
-				ZeroMemory(incoming, sizeof(incoming));
+				std::vector<std::wstring> messages;
 
-				int inDataLength = recv((SOCKET)wParam, (char*)incoming, sizeof(incoming) / sizeof((char)incoming[0]), 0);
-
-				if (inDataLength != -1)
-				{
-					Communicator::ProcessMessage(incoming, (SOCKET)wParam);
+				if (ReceiveData(messages, (SOCKET)wParam) != SOCKET_ERROR) {					
+					for (auto m : messages)
+					{
+						Communicator::ProcessMessage(m.c_str(), (SOCKET)wParam);
+					}
 				}
 			}
 			break;
@@ -82,16 +80,15 @@ namespace PlusPlusChat {
 	}
 
 	void Send(HWND hWnd) {
-		wchar_t szBuffer[1024];
+		wchar_t buffer[1001];
 
-		int test = sizeof(szBuffer);
-		ZeroMemory(szBuffer, sizeof(szBuffer));
+		ZeroMemory(buffer, sizeof(buffer));
 		// get the message
 		HWND hMessageTb = GetDlgItem(hWnd, IDC_CH_MESSAGE_TB);
-		SendMessage(hMessageTb, WM_GETTEXT, sizeof(szBuffer), reinterpret_cast<LPARAM>(szBuffer));
-		if (wcslen(szBuffer) > 0)
+		SendMessage(hMessageTb, WM_GETTEXT, sizeof(buffer), reinterpret_cast<LPARAM>(buffer));
+		if (wcslen(buffer) > 0)
 		{
-			Communicator::SendMsg(Action::SEND, szBuffer, ContextSingleton::GetInstance().Socket);
+			Communicator::SendMsg(Action::SEND, buffer, ContextSingleton::GetInstance().Socket);
 		}
 		SendMessage(hMessageTb, WM_SETTEXT, NULL, (LPARAM)L"");
 	}
@@ -147,9 +144,11 @@ namespace PlusPlusChat {
 		return true;
 	}
 
-	std::wstring GetTime() {
+	std::wstring GetTime(time_t t) {
 		wchar_t buffer[7];
-		time_t t = time(0);   // get time now
+		if (t == 0) {
+			t = time(0);   // get time now 
+		}
 		struct tm * now = localtime(&t);
 		int hour = now->tm_hour;
 		int minute = now->tm_min;
@@ -163,12 +162,12 @@ namespace PlusPlusChat {
 		return std::wstring(buffer);
 	}
 
-	void ReceiveMessageCH(std::wstring & sender, std::wstring & message) {
+	void ReceiveMessageCH(std::wstring & sender, time_t time, std::wstring & message) {
 		if (history.size() > 0) {
 			// remove null char
 			history.pop_back();
 		}
-		std::wstring info = GetTime() + sender + L"\r\n"; 
+		std::wstring info = GetTime(time) + sender + L"\r\n"; 
 		for (auto i = info.begin(); i < info.end(); i++)
 		{
 			history.push_back(*i);
@@ -185,8 +184,6 @@ namespace PlusPlusChat {
 	}
 
 	void CreateChatWindowLayout(HWND hWnd) {
-		ZeroMemory(szHistory, sizeof(szHistory));
-
 		// Create chat history
 		HWND hChatHistory = CreateWindowEx(
 			WS_EX_CLIENTEDGE,
@@ -223,7 +220,8 @@ namespace PlusPlusChat {
 		SendMessage(hChatHistory, WM_SETFONT, (WPARAM)font, MAKELPARAM(FALSE, 0));
 
 		SendMessage(hMessageTb, WM_SETFONT, (WPARAM)font, MAKELPARAM(FALSE, 0));
-		SendMessage(hMessageTb, WM_SETTEXT, NULL, (LPARAM)L"Type message here...");
+		SendMessage(hMessageTb, EM_LIMITTEXT, 1000, NULL);
+		//SendMessage(hMessageTb, WM_SETTEXT, NULL, (LPARAM)L"Type message here...");
 
 		SendMessage(hSendButton, WM_SETFONT, (WPARAM)font, MAKELPARAM(FALSE, 0));
 	}

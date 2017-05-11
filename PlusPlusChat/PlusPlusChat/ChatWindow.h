@@ -15,6 +15,7 @@
 #include "Communicator.h"
 #include "ContextSingleton.h"
 #include "Enumerations.h"
+#include "../../PlusPlusChat_shared/PlusPlusHelpers.h"
 
 // ChatWindow uses codes 200 - 299
 #define IDC_CH_HISTORY			201
@@ -27,8 +28,8 @@ namespace PlusPlusChat {
 	ATOM WINAPI RegisterChatWindow(HINSTANCE hInstance);
 	LRESULT CALLBACK ChatWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	bool ActivateChatWindow(std::wstring & roomName, std::wstring & userName);
-	void ReceiveMessageCH(std::wstring & sender, std::wstring & message);
-	std::wstring GetTime();
+	void ReceiveMessageCH(std::wstring & sender, time_t time, std::wstring & message);
+	std::wstring GetTime(time_t t);
 	void CreateChatWindowLayout(HWND hWnd);
 	void Send(HWND hWnd);
 	HWND CreateCustomEdit(
