@@ -8,6 +8,7 @@
 #include <memory>
 #include <atomic>
 #include <thread>
+#include <vector>
 
 namespace Taskify {
 	template<class Ret>
@@ -25,6 +26,14 @@ namespace Taskify {
 			_hasStarted->store(false);
 			_isRunning = std::make_shared<std::atomic<bool>>();
 			_isRunning->store(false);
+			_future = std::make_shared<std::shared_future<Ret>>();
+		}		
+
+		Task(const Task<Ret> & other) {
+			_wrapper = other._wrapper;
+			_future = other._future;
+			_isRunning = other._isRunning;
+			_hasStarted = other._hasStarted;
 		}
 
 		template<class PRet>
@@ -38,13 +47,7 @@ namespace Taskify {
 			_hasStarted->store(false);
 			_isRunning = std::make_shared<std::atomic<bool>>();
 			_isRunning->store(false);
-		}
-
-		Task(const Task<Ret> & other) {
-			_wrapper = other._wrapper;
-			_future = other._future;
-			_isRunning = other._isRunning;
-			_hasStarted = other._hasStarted;
+			_future = std::make_shared<std::shared_future<Ret>>();
 		}
 
 		void Start() {
@@ -53,7 +56,7 @@ namespace Taskify {
 				if (_hasStarted->compare_exchange_weak(exp, true)) {
 					std::promise<Ret> promise;
 					auto tmp = promise.get_future();
-					_future = tmp.share();
+					*_future = tmp.share();
 					_thread = std::thread(_wrapper, std::move(promise), _isRunning.get());
 				}
 			}
@@ -62,10 +65,14 @@ namespace Taskify {
 			if (_hasStarted->load() == false) {
 				Start();
 			}
-			_future.wait();
-			if (_future.valid()) {
-				return _future.get();
+			return _future->get();
+		}
+
+		void WaitTask() {
+			if (_hasStarted->load() == false) {
+				Start();
 			}
+			_future->wait();
 		}
 
 		template<class CRet>
@@ -76,13 +83,101 @@ namespace Taskify {
 		~Task() {
 			if (_thread.joinable()) { _thread.join(); }
 		}
+
+		bool IsRunning() {
+			return _isRunning->load();
+		}
+
+		bool HasStarted() {
+			return _hasStarted->load();
+		}
 	private:
 		std::function<void(std::promise<Ret>&&, std::atomic<bool>*)> _wrapper;
-		std::shared_future<Ret> _future;
+		std::shared_ptr<std::shared_future<Ret>> _future;
 		std::thread _thread;
 		std::shared_ptr<std::atomic<bool>> _hasStarted;
-		std::shared_ptr<std::atomic<bool>> _isRunning;
+		std::shared_ptr<std::atomic<bool>> _isRunning;		
 	};
+
+	template<class Ret>
+	void WaitAll(std::vector<Task<Ret>>& tasks) {
+		for (size_t i = 0; i < tasks.size(); i++)
+		{
+			tasks[i].Start();
+		}
+		for (size_t i = 0; i < tasks.size(); i++)
+		{
+			tasks[i].WaitTask();
+		}
+	}
+
+	template<class Ret>
+	size_t WaitAny(std::vector<Task<Ret>>& tasks) {
+		for (size_t i = 0; i < tasks.size(); i++)
+		{
+			tasks[i].Start();
+		}
+		while (true) {
+			for (size_t i = 0; i < tasks.size(); i++)
+			{
+				if (tasks[i].HasStarted() && !tasks[i].IsRunning()) {
+					return i;
+				}
+			}
+			std::this_thread::yield();
+		}
+	}
+
+	template<class Ret>
+	Task<std::vector<Ret>> WhenAll(std::vector<Task<Ret>>& tasks) {
+		return Task<std::vector<Ret>>([&]() {
+			for (size_t i = 0; i < tasks.size(); i++)
+			{
+				tasks[i].Start();
+			}
+			std::vector<Ret> result;
+			for (size_t i = 0; i < tasks.size(); i++)
+			{
+				result.push_back(tasks[i].GetResult());
+			}
+			return result;
+		});
+	}
+
+	template<class Ret> 
+	Task<Ret> WhenAny(std::vector<Task<Ret>>& tasks) {
+		return Task<Ret>([&]() {
+			for (size_t i = 0; i < tasks.size(); i++)
+			{
+				tasks[i].Start();
+			}
+			while (true) {
+				for (size_t i = 0; i < tasks.size(); i++)
+				{
+					if (tasks[i].HasStarted() && !tasks[i].IsRunning()) {
+						return tasks[i].GetResult();
+					}
+				}
+				std::this_thread::yield();
+			}
+		});
+	}
+
+	template <class Ret>
+	Task<Ret> StartNew(std::function<Ret(void)> f) {
+		auto task = Task<Ret>(f);
+		task.Start();
+		return task;
+	}
+
+
+
+
+
+
+
+
+
 
 	template<>
 	class Task<void>
