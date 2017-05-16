@@ -18,6 +18,7 @@
 #define IDC_SEND_BUTTON		153
 #define IDC_PING_TIMER		179
 #define IDC_UPTIME_TIMER	180
+#define IDC_CACHESIZE_TB	181
 
 #include <windows.h>
 #include <ctime>
@@ -30,6 +31,8 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 ATOM WINAPI RegisterMainWindow(HINSTANCE hInstance);
 void CreateMainWindowLayout(HWND hWnd);
 void UpdateUI(HWND hWnd, Server::ServerDetails & details, std::wstring & uptime);
+void StartServer(HWND hWnd);
+void StopServer(HWND hWnd);
 
 #endif
 

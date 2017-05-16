@@ -378,6 +378,7 @@ void Server::_ProcessMessage(std::wstring & message, SOCKET s) {
 			}
 			default:
 				validReq = false;
+				_HandleError(ErrorCode::INVALID_REQUEST, s);
 				break;
 			}
 			if (validReq) {
@@ -386,9 +387,10 @@ void Server::_ProcessMessage(std::wstring & message, SOCKET s) {
 			}
 		}
 	}
+	
 }
 
-void Server::StartListening(HWND hWnd, std::int_fast32_t port) {
+void Server::StartListening(HWND hWnd, std::int_fast32_t port, size_t cacheSize) {
 	auto && s = GetInstance();
 	WSADATA WsaDat;
 	int nResult = WSAStartup(MAKEWORD(2, 2), &WsaDat);
@@ -432,6 +434,7 @@ void Server::StartListening(HWND hWnd, std::int_fast32_t port) {
 		SendMessage(hWnd, WM_DESTROY, NULL, NULL);
 		return;
 	}
+	s.cacheSize = cacheSize;
 }
 
 void Server::_Ping() {

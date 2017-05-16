@@ -4,6 +4,11 @@ std::vector<wchar_t> history;
 bool shiftDown = false;
 bool capturedEnter = false;
 WNDPROC oldEditProc;
+const int SendBtnHeight = 23;
+const int SendBtnWidth = 75;
+const int MessageTbHeight = 60;
+const int sideMargin = 20;
+const int innerMargin = 10;
 
 namespace PlusPlusChat {
 	LRESULT CALLBACK ChatWindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -35,13 +40,28 @@ namespace PlusPlusChat {
 			WSACleanup();
 			return 0;
 		}
-		break;		
+		break;
+
+		case WM_GETMINMAXINFO: {
+			LPMINMAXINFO lpMMI = (LPMINMAXINFO)lParam;
+			lpMMI->ptMinTrackSize.x = 300;
+			lpMMI->ptMinTrackSize.y = 300;
+			return 0; // by processing this message I should return zero
+		}
+
+		case WM_SIZE: {
+			int width = LOWORD(lParam);
+			int height = HIWORD(lParam);
+			ResizeCH(hWnd, width, height);
+			break;
+		}
 
 		case WM_SOCKET:
 		{
 			if (WSAGETSELECTERROR(lParam))
 			{
 				if (lParam != WSAEMSGSIZE) {
+					auto l = WSAGetLastError();
 					MessageBox(hWnd,
 						L"Connection to server failed",
 						L"Error",
@@ -56,10 +76,10 @@ namespace PlusPlusChat {
 			{
 				std::vector<std::wstring> messages;
 
-				if (ReceiveData(messages, (SOCKET)wParam) != SOCKET_ERROR) {					
-					for (auto m : messages)
+				if (ReceiveData(messages, (SOCKET)wParam)) {					
+					for (auto i = messages.begin(); i < messages.end(); i++)
 					{
-						Communicator::ProcessMessage(m.c_str(), (SOCKET)wParam);
+						Communicator::ProcessMessage(*i, (SOCKET)wParam);
 					}
 				}
 			}
@@ -189,14 +209,14 @@ namespace PlusPlusChat {
 			WS_EX_CLIENTEDGE,
 			L"EDIT", L"",
 			WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_READONLY | WS_VSCROLL | ES_AUTOVSCROLL,
-			20, 20, 585, 300,
+			sideMargin, sideMargin, 585, 300,
 			hWnd, (HMENU)IDC_CH_HISTORY,
 			GetModuleHandle(NULL), NULL);		
 
 		// Create outgoing message box
 		HWND hMessageTb = CreateCustomEdit(
 			WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL,
-			20, 330, 585, 60,
+			sideMargin, 330, 585, MessageTbHeight,
 			hWnd, (HMENU)IDC_CH_MESSAGE_TB,
 			GetModuleHandle(NULL));
 
@@ -205,7 +225,7 @@ namespace PlusPlusChat {
 			0,
 			L"BUTTON", L"Send",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-			530, 400, 75, 23,
+			530, 400, SendBtnWidth, SendBtnHeight,
 			hWnd, (HMENU)IDC_CH_SEND_BUTTON,
 			GetModuleHandle(NULL), NULL);
 
@@ -276,5 +296,21 @@ namespace PlusPlusChat {
 		//set old proc
 		oldEditProc = (WNDPROC)SetWindowLongPtr(hInput, GWLP_WNDPROC, (LONG_PTR)subEditProc);
 		return hInput;
+	}
+
+	void ResizeCH(HWND hWnd, int width, int height) {
+		// compute history size
+		int historyHeight = height - (2 * sideMargin + 2 * innerMargin + SendBtnHeight + MessageTbHeight);
+		int innerWidth = width - 2 * sideMargin;
+		MoveWindow(GetDlgItem(hWnd, IDC_CH_HISTORY), sideMargin, sideMargin, innerWidth, historyHeight, true);
+
+		// compute message textbox position
+		int msgTopOffset = sideMargin + historyHeight + innerMargin;
+		MoveWindow(GetDlgItem(hWnd, IDC_CH_MESSAGE_TB), sideMargin, msgTopOffset, innerWidth, MessageTbHeight, true);
+
+		// compute send button position
+		int sendLeftOffset = width - (sideMargin + SendBtnWidth);
+		int sendTopMargin = sideMargin + historyHeight + MessageTbHeight + 2 * innerMargin;
+		MoveWindow(GetDlgItem(hWnd, IDC_CH_SEND_BUTTON), sendLeftOffset, sendTopMargin, SendBtnWidth, SendBtnHeight, true);
 	}
 }

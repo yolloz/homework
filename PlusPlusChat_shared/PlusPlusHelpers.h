@@ -8,5 +8,5 @@
 #include <WinSock2.h>
 #include <vector>
 
-int ReceiveData(std::vector<std::wstring> & messages, SOCKET socket);
+bool ReceiveData(std::vector<std::wstring> & messages, SOCKET socket);
 #endif

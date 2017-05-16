@@ -138,7 +138,7 @@ public:
 	static inline bool CanAddClient() {
 		return GetInstance()._CanAddClient();
 	}
-	static void StartListening(HWND hWnd, std::int_fast32_t port);
+	static void StartListening(HWND hWnd, std::int_fast32_t port, size_t cacheSize = 10);
 	static inline void ProcessMessage(std::wstring & message, SOCKET s) {
 		GetInstance()._ProcessMessage(message, s);
 	}
@@ -175,7 +175,7 @@ private:
 	std::uint64_t _id = 1;
 	const std::wstring UNIQ = L"#PPChat";
 	const wchar_t SPACE = L' ';
-	size_t cacheSize = 5;
+	size_t cacheSize = 0;
 
 	bool _CanAddClient() const;
 	bool _AddClient(SOCKET newSocket);

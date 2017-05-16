@@ -248,40 +248,13 @@ namespace PlusPlusChat {
 			{
 			case FD_READ:
 			{
-				std::vector<wchar_t> incoming(1100, 0);
-				auto q = incoming.size() * sizeof(incoming[0]);
-				int inDataLength = recv((SOCKET)wParam, (char*)incoming.data(), incoming.size() * sizeof(incoming[0]), 0);
-				while (inDataLength == q) {
-					incoming.resize(q, 0);
-					inDataLength = recv((SOCKET)wParam, (char*)incoming.data(), incoming.size() * sizeof(incoming[0]), 0);
-				}
-				bool wasNull = true;
-				auto start = incoming.begin();
 				std::vector<std::wstring> messages;
-				for (auto  i = incoming.begin(); i < incoming.end(); i++)
-				{
-					if (*i == 0) {
-						if (wasNull) {
-							// two nulls mean nothing is behind this
-							break;
-						}
-						else {
-							wasNull = true;
-							// cut message
-							messages.push_back(std::wstring(start, i));
-						}
-					}
-					else {
-						if (wasNull) {
-							wasNull = false;
-							start = i;
-						}
-					}
-				}
 
-				for (auto m : messages)
-				{
-					Communicator::ProcessMessage(m.c_str(), (SOCKET)wParam);
+				if (ReceiveData(messages, (SOCKET)wParam)) {
+					for (auto i = messages.begin(); i < messages.end(); i++)
+					{
+						Communicator::ProcessMessage(*i, (SOCKET)wParam);
+					}
 				}
 			}
 			break;
@@ -313,7 +286,7 @@ namespace PlusPlusChat {
 		HWND hWnd = CreateWindowEx(NULL,
 			L"Room Window",
 			L"PlusPlusChat",
-			WS_OVERLAPPEDWINDOW,
+			WS_OVERLAPPEDWINDOW & ~WS_SIZEBOX,
 			200, 200, 355, 460,
 			NULL,
 			NULL,

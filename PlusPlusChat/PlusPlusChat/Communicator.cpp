@@ -5,9 +5,8 @@ namespace PlusPlusChat {
 	const std::wstring Communicator::SPACE = L" ";
 	std::map<std::wstring, Action> Communicator::_actionLookup;
 
-	bool Communicator::ProcessMessage(const wchar_t * message, SOCKET s) {
-		std::wstring ws(message);
-		std::vector<std::wstring> tokens = Communicator::split(ws, L' ');
+	bool Communicator::ProcessMessage(std::wstring & message, SOCKET s) {
+		std::vector<std::wstring> tokens = Communicator::split(message, L' ');
 		if (tokens.size() >= 2) {
 			if (tokens[0] == UNIQ) {
 				auto action = Communicator::ResolveAction(tokens[1]);
@@ -49,7 +48,7 @@ namespace PlusPlusChat {
 				case Action::RECV: {
 					if (ContextSingleton::GetInstance().state == AppState::CHATTING) {
 						// cut out message
-						std::wstring text(ws, tokens[0].length() + tokens[1].length() + tokens[2].length() + 3);
+						std::wstring text(message, tokens[0].length() + tokens[1].length() + tokens[2].length() + 3);
 						ReceiveMessageCH(tokens[2], 0, text);
 					}
 					break;
@@ -59,7 +58,7 @@ namespace PlusPlusChat {
 					if (ContextSingleton::GetInstance().state == AppState::CHATTING) {
 						if (tokens.size() > 4) {
 							// cut out message
-							std::wstring text(ws, tokens[0].length() + tokens[1].length() + tokens[2].length() + tokens[3].length() + 4);
+							std::wstring text(message, tokens[0].length() + tokens[1].length() + tokens[2].length() + tokens[3].length() + 4);
 							time_t t = 0;
 							try {
 								t = std::stoull(tokens[2]);
@@ -100,7 +99,7 @@ namespace PlusPlusChat {
 						hWnd = ContextSingleton::GetInstance().roomWindow;
 						break;
 					}
-					std::wstring error(ws, tokens[0].length() + tokens[1].length() + 2);
+					std::wstring error(message, tokens[0].length() + tokens[1].length() + 2);
 					if (state == AppState::JOINING) {
 						ContextSingleton::GetInstance().state = AppState::CONNECTED;
 						SetWaitingRW(hWnd, false);

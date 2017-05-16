@@ -32,6 +32,7 @@ namespace PlusPlusChat {
 	std::wstring GetTime(time_t t);
 	void CreateChatWindowLayout(HWND hWnd);
 	void Send(HWND hWnd);
+	void ResizeCH(HWND hWnd, int width, int height);
 	HWND CreateCustomEdit(
 		_In_     DWORD     dwStyle,
 		_In_     int       x,

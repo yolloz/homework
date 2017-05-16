@@ -179,7 +179,7 @@ void CreateMainWindowLayout(HWND hWnd) {
 		WS_EX_CLIENTEDGE,
 		L"EDIT", L"",
 		WS_CHILD | WS_VISIBLE | ES_NUMBER,
-		185, 285, 60, 23,
+		185, 265, 60, 23,
 		hWnd, (HMENU)IDC_PORTNUMBER,
 		GetModuleHandle(NULL), NULL);
 
@@ -188,7 +188,25 @@ void CreateMainWindowLayout(HWND hWnd) {
 		0,
 		L"STATIC", L"Port (optional):",
 		WS_CHILD | WS_VISIBLE,
-		85, 288, 90, 20,
+		75, 268, 100, 20,
+		hWnd, NULL,
+		GetModuleHandle(NULL), NULL);
+
+	// Create port message box
+	HWND hCacheSize = CreateWindowEx(
+		WS_EX_CLIENTEDGE,
+		L"EDIT", L"",
+		WS_CHILD | WS_VISIBLE | ES_NUMBER,
+		185, 298, 60, 23,
+		hWnd, (HMENU)IDC_CACHESIZE_TB,
+		GetModuleHandle(NULL), NULL);
+
+	// Create port label
+	HWND hCacheLbl = CreateWindowEx(
+		0,
+		L"STATIC", L"Message cache size:",
+		WS_CHILD | WS_VISIBLE,
+		75, 301, 100, 20,
 		hWnd, NULL,
 		GetModuleHandle(NULL), NULL);
 
@@ -229,8 +247,11 @@ void CreateMainWindowLayout(HWND hWnd) {
 	SendMessage(hControlGrp, WM_SETFONT, (WPARAM)font, MAKELPARAM(FALSE, 0));
 	SendMessage(hPortNumber, WM_SETFONT, (WPARAM)font, MAKELPARAM(FALSE, 0));
 	SendMessage(hPortNumber, EM_LIMITTEXT, 5, NULL);
-
 	SendMessage(hPortLbl, WM_SETFONT, (WPARAM)font, MAKELPARAM(FALSE, 0));
+
+	SendMessage(hCacheSize, WM_SETFONT, (WPARAM)font, MAKELPARAM(FALSE, 0));
+	SendMessage(hCacheSize, EM_LIMITTEXT, 5, NULL);
+	SendMessage(hCacheLbl, WM_SETFONT, (WPARAM)font, MAKELPARAM(FALSE, 0));	
 
 	SendMessage(hStartBtn, WM_SETFONT, (WPARAM)font, MAKELPARAM(FALSE, 0));
 
@@ -246,48 +267,10 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		case IDC_MAIN_BUTTON:
 		{
 			if (Server::State() == AppState::STOPPED) {
-				// Get port number
-				wchar_t portBuffer[6];
-				HWND hPortNumber = GetDlgItem(hWnd, IDC_PORTNUMBER);
-				SendMessage(hPortNumber, WM_GETTEXT, sizeof(portBuffer), reinterpret_cast<LPARAM>(portBuffer));
-				std::int_fast32_t port = 0;
-				for (size_t i = 0; i < wcslen(portBuffer); i++)
-				{
-					port *= 10;
-					port += portBuffer[i] - L'0';
-				}
-				if (port == 0) {
-					port = Server::defaultPort;
-				}
-				if (port > 65535 || port < 1024) {
-					MessageBox(hWnd, L"Port number is invalid. Valid numbers are 1024 - 65535", L"Invalid port number", MB_ICONERROR);
-					break;
-				}
-				SendMessage(GetDlgItem(hWnd, IDC_MAIN_BUTTON), WM_SETTEXT, NULL, (LPARAM)L"Stop");
-				EnableWindow(hPortNumber, false);
-				Server::StartListening(hWnd, port);
-				Server::State() = AppState::LISTENING;
-				// start timer
-				SetTimer(hWnd, IDC_PING_TIMER, 300000, NULL);
-				SetTimer(hWnd, IDC_UPTIME_TIMER, 31000, NULL);
-				startTime = time(0);
-				std::wstring zeroTime = L"00:00";
-				UpdateUI(hWnd, Server::ServerDetails(), zeroTime);
-				MessageBox(NULL, (L"Server started listening at port " + std::to_wstring(port)).c_str(), L"Information", MB_ICONINFORMATION);
+				StartServer(hWnd);
 			}
 			else {
-				// stop timer
-				KillTimer(hWnd, IDC_PING_TIMER);
-				KillTimer(hWnd, IDC_UPTIME_TIMER);
-				shutdown(Server::ServerSocket(), SD_BOTH);
-				closesocket(Server::ServerSocket());
-				WSACleanup();
-				HWND hPortNumber = GetDlgItem(hWnd, IDC_PORTNUMBER);
-				std::wstring noTime = L"--:--";
-				UpdateUI(hWnd, Server::ServerDetails(), noTime);
-				SendMessage(GetDlgItem(hWnd, IDC_MAIN_BUTTON), WM_SETTEXT, NULL, (LPARAM)L"Start");
-				EnableWindow(hPortNumber, true);
-				Server::State() = AppState::STOPPED;
+				StopServer(hWnd);
 			}
 			break;
 		}		
@@ -321,7 +304,7 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		{
 			std::vector<std::wstring> messages;
 
-			if (ReceiveData(messages, (SOCKET)wParam) != SOCKET_ERROR) {
+			if (ReceiveData(messages, (SOCKET)wParam)) {
 				for (auto && m : messages)
 				{
 					Server::ProcessMessage(m, (SOCKET)wParam);
@@ -404,7 +387,7 @@ HWND CreateMainWindow(HINSTANCE hInstance) {
 	HWND hWindow = CreateWindowEx(NULL,
 		L"MainWindow Class",
 		L"PlusPlusChat Server",
-		WS_OVERLAPPEDWINDOW,
+		WS_OVERLAPPEDWINDOW & ~WS_SIZEBOX,
 		200,
 		200,
 		345,
@@ -414,6 +397,77 @@ HWND CreateMainWindow(HINSTANCE hInstance) {
 		hInstance,
 		NULL);
 	return hWindow;
+}
+
+void StartServer(HWND hWnd) {
+	// Get port number
+	wchar_t buffer[6];
+	HWND hPortNumber = GetDlgItem(hWnd, IDC_PORTNUMBER);
+	SendMessage(hPortNumber, WM_GETTEXT, sizeof(buffer), reinterpret_cast<LPARAM>(buffer));
+	std::int_fast32_t port = 0;
+	port = std::stoi(buffer);
+	/*for (size_t i = 0; i < wcslen(portBuffer); i++)
+	{
+		port *= 10;
+		port += portBuffer[i] - L'0';
+	}*/
+	if (port == 0) {
+		port = Server::defaultPort;
+	}
+	if (port > 65535 || port < 1024) {
+		MessageBox(hWnd, L"Port number is invalid. Valid numbers are 1024 - 65535", L"Invalid port number", MB_ICONERROR);
+		return;
+	}
+
+	// get cache size
+	HWND hCacheSize = GetDlgItem(hWnd, IDC_CACHESIZE_TB);
+	SendMessage(hCacheSize, WM_GETTEXT, sizeof(buffer), reinterpret_cast<LPARAM>(buffer));
+	size_t cacheSize = 0;
+	bool defaultCache = true;
+	if (wcslen(buffer) > 0) {
+		cacheSize = std::stoi(buffer);
+		defaultCache = false;
+	}
+
+	// now start the server
+	SendMessage(GetDlgItem(hWnd, IDC_MAIN_BUTTON), WM_SETTEXT, NULL, (LPARAM)L"Stop");
+	// passivate GUI
+	EnableWindow(hPortNumber, false);
+	EnableWindow(hCacheSize, false);
+	if (defaultCache) {
+		Server::StartListening(hWnd, port);
+	}
+	else {
+		Server::StartListening(hWnd, port, cacheSize);
+	}
+	Server::State() = AppState::LISTENING;
+	// start timer
+	SetTimer(hWnd, IDC_PING_TIMER, 300000, NULL);
+	SetTimer(hWnd, IDC_UPTIME_TIMER, 31000, NULL);
+	startTime = time(0);
+	std::wstring zeroTime = L"00:00";
+	UpdateUI(hWnd, Server::ServerDetails(), zeroTime);
+	// let the user know
+	MessageBox(NULL, (L"Server started listening at port " + std::to_wstring(port)).c_str(), L"Information", MB_ICONINFORMATION);
+}
+
+void StopServer(HWND hWnd) {
+	// stop timers
+	KillTimer(hWnd, IDC_PING_TIMER);
+	KillTimer(hWnd, IDC_UPTIME_TIMER);
+
+	// kill socket
+	shutdown(Server::ServerSocket(), SD_BOTH);
+	closesocket(Server::ServerSocket());
+	WSACleanup();
+
+	// enable GUI	
+	std::wstring noTime = L"--:--";
+	UpdateUI(hWnd, Server::ServerDetails(), noTime);
+	SendMessage(GetDlgItem(hWnd, IDC_MAIN_BUTTON), WM_SETTEXT, NULL, (LPARAM)L"Start");
+	EnableWindow(GetDlgItem(hWnd, IDC_PORTNUMBER), true);
+	EnableWindow(GetDlgItem(hWnd, IDC_CACHESIZE_TB), true);
+	Server::State() = AppState::STOPPED;
 }
 
 void UpdateUI(HWND hWnd, Server::ServerDetails & details, std::wstring & uptime) {

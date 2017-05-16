@@ -226,14 +226,13 @@ namespace PlusPlusChat {
 			{
 			case FD_READ:
 			{
-				wchar_t incoming[1100];
-				ZeroMemory(incoming, sizeof(incoming));
+				std::vector<std::wstring> messages;
 
-				int inDataLength = recv((SOCKET)wParam, (char*)incoming, sizeof(incoming) / sizeof((char)incoming[0]), 0);
-
-				if (inDataLength != -1)
-				{
-					Communicator::ProcessMessage(incoming, (SOCKET)wParam);
+				if (ReceiveData(messages, (SOCKET)wParam)) {
+					for (auto i = messages.begin(); i < messages.end(); i++)
+					{
+						Communicator::ProcessMessage(*i, (SOCKET)wParam);
+					}
 				}
 			}
 			break;
@@ -274,7 +273,7 @@ namespace PlusPlusChat {
 		HWND hWnd = CreateWindowEx(NULL,
 			L"Connection Window",
 			L"PlusPlusChat",
-			WS_OVERLAPPEDWINDOW,
+			WS_OVERLAPPEDWINDOW & ~ WS_SIZEBOX,
 			200, 200, 435, 245,
 			NULL,
 			NULL,
