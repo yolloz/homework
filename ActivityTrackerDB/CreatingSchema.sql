@@ -14,7 +14,8 @@ create table [User](
 	LastLogin datetime null,
 	constraint PK_User primary key clustered (ID),
 	constraint UQ_User_Username unique (Username),
-	constraint CHK_User_Username check (len(Username) >= 3)
+	constraint CHK_User_Username check (len(Username) >= 3),
+	constraint CHK_User_Passwd check (len(Passwd) >= 6)
 )
 
 create table ActivityType(
@@ -28,8 +29,10 @@ create table Friendship(
 	User1 bigint not null,
 	User2 bigint not null,
 	CreateDate datetime not null default getdate(),
-	constraint FK_Friendship_User1 foreign key (User1) references [User](ID),
-	constraint FK_Friendship_User2 foreign key (User2) references [User](ID),
+	constraint FK_Friendship_User1 foreign key (User1) references [User](ID)
+		on delete cascade,
+	constraint FK_Friendship_User2 foreign key (User2) references [User](ID)
+		on delete cascade,
 	constraint PK_Friendship primary key (User1, User2)
 )
 
@@ -42,7 +45,8 @@ create table Challenge(
 	StartDate datetime not null,
 	EndDate datetime not null,
 	constraint PK_Challenge primary key clustered(ID),
-	constraint FK_Challenge_ActivityType foreign key (ActivityType) references ActivityType(ID),
+	constraint FK_Challenge_ActivityType foreign key (ActivityType) references ActivityType(ID)
+		on delete no action,
 	constraint CHK_Challenge_Description check (len([Description]) >= 10),
 	constraint CHK_Challenge_DateDifference check (StartDate < EndDate)
 )
@@ -50,8 +54,10 @@ create table Challenge(
 create table ChallengeParticipation(
 	UserID bigint not null,
 	ChallengeID bigint not null,
-	constraint FK_ChallengeParticipation_UserID foreign key (UserID) references [User](ID),
-	constraint FK_ChallengeParticipation_ChallengeID foreign key (ChallengeID) references Challenge(ID),
+	constraint FK_ChallengeParticipation_UserID foreign key (UserID) references [User](ID)
+		on delete cascade,
+	constraint FK_ChallengeParticipation_ChallengeID foreign key (ChallengeID) references Challenge(ID)
+		on delete cascade,
 	constraint PK_ChallengeParticipation primary key (UserID, ChallengeID)
 )
 
@@ -63,6 +69,7 @@ create table [Route](
 	CreateDate datetime not null default getdate(),
 	constraint PK_Route primary key clustered (ID),
 	constraint FK_Route_OwnerID foreign key (OwnerID) references [User](ID)
+		on delete cascade
 )
 
 create table Activity(
@@ -74,9 +81,12 @@ create table Activity(
 	Distance numeric(5,3) null,
 	StartDate datetime not null default getdate(),
 	constraint PK_Activity primary key clustered (ID),
-	constraint FK_Activity_UserID foreign key (UserID) references [User](ID),
-	constraint FK_Activity_RouteID foreign key (RouteID) references [Route](ID),
-	constraint FK_Activity_ActivityTypeID foreign key (ActivityTypeID) references ActivityType(ID),
+	constraint FK_Activity_UserID foreign key (UserID) references [User](ID)
+		on delete cascade,
+	constraint FK_Activity_RouteID foreign key (RouteID) references [Route](ID)
+		on delete set null,
+	constraint FK_Activity_ActivityTypeID foreign key (ActivityTypeID) references ActivityType(ID)
+		on delete no action,
 	constraint CHK_Activity_Duration check (Duration >= 0),
 	constraint CHK_Activity_Distance check (Distance is null or Distance >= 0)
 )
