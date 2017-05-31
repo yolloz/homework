@@ -12,7 +12,7 @@
 
 namespace Taskify {
 	template<class Ret>
-	// represents a task which should be executed in a different thread with delayed start
+	// Represents a task which should be executed in a different thread with delayed start
 	class Task
 	{
 	public:
@@ -184,6 +184,8 @@ namespace Taskify {
 	}
 
 	/* VOID SPECIALIZATION */
+
+
 	template<>
 	class Task<void>
 	{

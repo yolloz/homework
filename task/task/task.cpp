@@ -98,7 +98,7 @@ int main() {
 	///*** VOID TEST ***///
 
 	// TEST copying and reevaluating tasks
-	std::cout << std::endl << "TESTING void copying and reevaluating\n" << std::endl;
+	/*std::cout << std::endl << "TESTING void copying and reevaluating\n" << std::endl;
 	auto task1 = Taskify::Task<void>([]() {
 	std::cout << "task 1 starting\n";
 	std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -120,7 +120,7 @@ int main() {
 	task2.GetResult();
 	task1.GetResult();
 	task1.GetResult();
-	task3.GetResult();
+	task3.GetResult();*/
 
 	// create vector for global functions
 	/*std::vector<Taskify::Task<void>> tasks;
