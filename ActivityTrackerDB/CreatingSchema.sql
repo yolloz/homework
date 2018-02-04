@@ -29,10 +29,11 @@ create table Friendship(
 	User1 bigint not null,
 	User2 bigint not null,
 	CreateDate datetime not null default getdate(),
+	Pending bit not null default 1
 	constraint FK_Friendship_User1 foreign key (User1) references [User](ID)
-		on delete cascade,
+		on delete no action, -- must delete this in a trigger
 	constraint FK_Friendship_User2 foreign key (User2) references [User](ID)
-		on delete cascade,
+		on delete no action, -- must delete this in a trigger
 	constraint PK_Friendship primary key (User1, User2)
 )
 
@@ -64,12 +65,12 @@ create table ChallengeParticipation(
 create table [Route](
 	ID bigint identity(1,1) not null,
 	[Description] nvarchar(255) null,
-	OwnerID bigint not null,
+	OwnerID bigint null,
 	[Public] bit not null,
 	CreateDate datetime not null default getdate(),
 	constraint PK_Route primary key clustered (ID),
 	constraint FK_Route_OwnerID foreign key (OwnerID) references [User](ID)
-		on delete cascade
+		on delete set null -- create trigger that deletes route if it is never referenced
 )
 
 create table Activity(
@@ -83,13 +84,11 @@ create table Activity(
 	constraint PK_Activity primary key clustered (ID),
 	constraint FK_Activity_UserID foreign key (UserID) references [User](ID)
 		on delete cascade,
-	constraint FK_Activity_RouteID foreign key (RouteID) references [Route](ID)
-		on delete set null,
-	constraint FK_Activity_ActivityTypeID foreign key (ActivityTypeID) references ActivityType(ID)
-		on delete no action,
+	constraint FK_Activity_RouteID foreign key (RouteID) references [Route](ID),
+	constraint FK_Activity_ActivityTypeID foreign key (ActivityTypeID) references ActivityType(ID),
 	constraint CHK_Activity_Duration check (Duration >= 0),
 	constraint CHK_Activity_Distance check (Distance is null or Distance >= 0)
 )
 
-rollback transaction
---commit transaction
+--rollback transaction
+commit transaction

@@ -11,6 +11,5 @@ drop table Friendship
 drop table ActivityType
 drop table [User]
 
-rollback transaction
---commit transaction
-
+--rollback transaction
+commit transaction
