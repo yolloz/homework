@@ -1,3 +1,8 @@
+/*
+	Autor: Michal Jurco
+	skript: Vlozenie testovacich dat
+*/
+
 use ActivityTracker
 go
 

@@ -1,3 +1,14 @@
+/*
+	Autor: Michal Jurco
+	skript: Vytvorenie schemy
+
+	Popis zadania:
+		Riešenie je aplikácia ako Strava, Endomondo alebo Runkeeper - aplikácia, kde si uívatelia zaznamenávajú svoje športové aktivity.
+		Je moné zaznamenáva viacero druhov aktivít (beh, cyklistika, plávanie...), ïalej sa uívatelia mohli priateli, 
+		take môu vidie aktivity svojich priate¾ov a je moné organizova vızvy - challenges, do ktorıch sa môe ktoko¾vek zapoji, 
+		majú nejakı cie¾ a víaz by mohol obdra nejakú odmenu.
+*/
+
 use ActivityTracker
 go
 

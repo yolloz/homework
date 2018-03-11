@@ -1,3 +1,8 @@
+/*
+	Autor: Michal Jurco
+	skript: Vytvorenie procedur, funkcii a pohladov
+*/
+
 use ActivityTracker
 go
 
@@ -159,10 +164,6 @@ go
 create function ToTimeString(@pSeconds bigint)
 	returns varchar(30)
 	as begin
-		/*declare @hours bigint = @pSeconds / 3600
-		set @pSeconds = @pSeconds % 3600
-		declare @minutes bigint = @pSeconds / 60
-		set @pSeconds = @pSeconds % 60*/
 		return(SELECT CONVERT(varchar, DATEADD(ms, @pSeconds * 1000, 0), 108))
 	end
 go
@@ -277,10 +278,10 @@ create view ChallengeLeaderboards
 	as
 		select cp.UserID, cp.ChallengeID, sum(a.Distance) as totalDistance, sum(a.Duration) as totalDuration
 			from Challenge as ch
-			inner join ChallengeParticipation as cp on (ch.ID = cp.ChallengeID)
-			inner join Activity as a on (a.UserID = cp.UserID)
+			inner join ChallengeParticipation as cp on (ch.ID = cp.ChallengeID)			
 			inner join [User] as u on (cp.UserID = u.ID)
-			where a.ActivityTypeID = ch.ActivityType
+			left join Activity as a on (a.UserID = cp.UserID)
+			where a.ActivityTypeID = ch.ActivityType or a.ActivityTypeID is null --activityType = null -> no activity for user
 			group by cp.UserID, cp.ChallengeID
 go
 
@@ -376,6 +377,39 @@ as
 	select u.ID as UserID, r.*
 	from [User] as u
 	inner join [Route] as r on (u.ID = r.OwnerID or (u.id != r.OwnerID and r.OwnerID is not null and r.[Public] = 1) or (r.OwnerID is null and r.[Public] = 1))
+go
+
+if object_id('NewsFeed', 'V') is not null drop view NewsFeed
+go
+
+create view NewsFeed
+as 	
+	--own activities
+	select u.ID as UserID, u.Username as Username, atp.[Description] as Sport, 
+		ActivityTracker.dbo.ToTimeString(a.Duration) as Duration, a.Distance as Distance, a.StartDate as [Date]
+	from [User] as u
+	inner join Activity as a on (a.UserID = u.ID)
+	inner join ActivityType as atp on (a.ActivityTypeID = atp.ID)
+	union
+	--friend activities as user1
+	select u.ID as UserID, u2.Username as Username, atp.[Description] as Sport, 
+		ActivityTracker.dbo.ToTimeString(a.Duration) as Duration, a.Distance as Distance, a.StartDate as [Date]
+	from [User] as u
+	inner join Friendship as fr on (u.ID = fr.User1)
+	inner join [User] as u2 on (u2.ID = fr.User2 and fr.Pending = 0)
+	inner join Activity as a on (a.UserID = u2.ID)
+	inner join ActivityType as atp on (a.ActivityTypeID = atp.ID)
+	union
+	--friend activities as user2
+	select u.ID as UserID, u2.Username as Username, atp.[Description] as Sport, 
+		ActivityTracker.dbo.ToTimeString(a.Duration) as Duration, a.Distance as Distance, a.StartDate as [Date]
+	from [User] as u
+	inner join Friendship as fr on (u.ID = fr.User1)
+	inner join [User] as u2 on (u2.ID = fr.User2 and fr.Pending = 0)
+	inner join Activity as a on (a.UserID = u2.ID)
+	inner join ActivityType as atp on (a.ActivityTypeID = atp.ID)
+go
+
 	 
 
 

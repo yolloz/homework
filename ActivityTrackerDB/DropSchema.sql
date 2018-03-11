@@ -1,3 +1,8 @@
+/*
+	Autor: Michal Jurco
+	skript: Zrusenie schemy
+*/
+
 use ActivityTracker
 go
 
